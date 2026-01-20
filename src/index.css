@@ -1,0 +1,113 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  @layer base {
+    :root {
+      --background: 0 0% 100%;
+      --foreground: 210 11% 15%;
+
+      --card: 0 0% 100%;
+      --card-foreground: 210 11% 15%;
+
+      --popover: 0 0% 100%;
+      --popover-foreground: 210 11% 15%;
+
+      --primary: 212 92% 43%;
+      --primary-foreground: 0 0% 100%;
+
+      --secondary: 210 40% 96.1%;
+      --secondary-foreground: 222.2 47.4% 11.2%;
+
+      --muted: 210 40% 96.1%;
+      --muted-foreground: 215.4 16.3% 46.9%;
+
+      --accent: 210 40% 96.1%;
+      --accent-foreground: 222.2 47.4% 11.2%;
+
+      --destructive: 0 84.2% 60.2%;
+      --destructive-foreground: 210 40% 98%;
+
+      --border: 213 14% 84%;
+      --input: 213 14% 84%;
+      --ring: 212 92% 43%;
+
+      --radius: 0.375rem;
+    }
+
+    .dark {
+      /* GitHub Dark Dimmed / Defaultish */
+      --background: 210 18% 7%;
+      /* #0d1117 */
+      --foreground: 210 15% 91%;
+      /* #c9d1d9 */
+
+      --card: 212 18% 10%;
+      /* #161b22 */
+      --card-foreground: 210 15% 91%;
+
+      --popover: 212 18% 10%;
+      --popover-foreground: 210 15% 91%;
+
+      --primary: 212 100% 48%;
+      /* #2f81f7 - GitHub Blue */
+      --primary-foreground: 0 0% 100%;
+
+      --secondary: 213 13% 14%;
+      /* Button bg */
+      --secondary-foreground: 210 15% 91%;
+
+      --muted: 212 18% 10%;
+      --muted-foreground: 213 10% 55%;
+      /* #8b949e */
+
+      --accent: 213 13% 14%;
+      --accent-foreground: 210 15% 91%;
+
+      --destructive: 356 72% 49%;
+      --destructive-foreground: 0 0% 100%;
+
+      --border: 213 18% 20%;
+      /* #30363d */
+      --input: 213 18% 20%;
+      --ring: 212 100% 48%;
+    }
+
+    /* Animated Hue Mode */
+    .theme-hue {
+      --background: 260 20% 10%;
+      --foreground: 0 0% 100%;
+      --primary: 280 80% 60%;
+      /* ... other overrides handled by global animation class usually */
+    }
+  }
+
+  @layer utilities {
+    .animate-hue-infinite {
+      animation: hue-rotate-global 10s infinite linear;
+    }
+  }
+
+  @keyframes hue-rotate-global {
+    0% {
+      filter: hue-rotate(0deg);
+    }
+
+    100% {
+      filter: hue-rotate(360deg);
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

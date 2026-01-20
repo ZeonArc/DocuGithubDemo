@@ -1,0 +1,154 @@
+{
+    "name": "DocuGithub Backend",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "generate-docs",
+                "options": {}
+            },
+            "id": "webhook-trigger",
+            "name": "Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                460,
+                340
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const repoUrl = $input.body.repoUrl;\nconst parts = repoUrl.replace('https://github.com/', '').split('/');\nconst owner = parts[0];\nconst repo = parts[1];\n\nreturn {\n  json: {\n    owner,\n    repo,\n    url: `https://api.github.com/repos/${owner}/${repo}/contents`\n  }\n};"
+            },
+            "id": "parse-url",
+            "name": "Parse URL",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 1,
+            "position": [
+                680,
+                340
+            ]
+        },
+        {
+            "parameters": {
+                "url": "={{ $json.url }}",
+                "authentication": "none",
+                "options": {}
+            },
+            "id": "github-api",
+            "name": "GitHub API (Fetch)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 3,
+            "position": [
+                900,
+                340
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Simplification: In a real app, we would recursively fetch files.\n// For this demo, we just map the top-level file names to give context.\n\nconst files = $input.all().map(item => item.json.name).join(', ');\n\nreturn {\n  json: {\n    fileStructure: files,\n    repoName: $('Parse URL').item.json.repo\n  }\n};"
+            },
+            "id": "prep-context",
+            "name": "Prep Context",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 1,
+            "position": [
+                1120,
+                340
+            ]
+        },
+        {
+            "parameters": {
+                "modelId": "models/gemini-1.5-pro",
+                "prompt": "=You are an expert technical writer.\n\nI need you to generate comprehensive documentation for a GitHub repository named \"{{ $json.repoName }}\".\n\nThe repository contains the following file structure at the root level: {{ $json.fileStructure }}.\n\nPlease generate a professional README.md file in Markdown format.\nInclude the following sections:\n1. Project Title & Description\n2. Features (Inferred from file names like 'auth', 'database' etc if visible, otherwise generic)\n3. Installation (Assume npm/node if package.json exists, otherwise generic)\n4. Usage\n\nDo not include any conversational text, just the Markdown.",
+                "options": {}
+            },
+            "id": "google-gemini",
+            "name": "Google Gemini",
+            "type": "n8n-nodes-base.googleGemini",
+            "typeVersion": 1,
+            "position": [
+                1340,
+                340
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "YOUR_CREDENTIAL_ID",
+                    "name": "Google Gemini Account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={\n  \"markdown\": \"{{ $json.text }}\"\n}",
+                "options": {}
+            },
+            "id": "response",
+            "name": "Respond to Webhook",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                1560,
+                340
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Parse URL",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse URL": {
+            "main": [
+                [
+                    {
+                        "node": "GitHub API (Fetch)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "GitHub API (Fetch)": {
+            "main": [
+                [
+                    {
+                        "node": "Prep Context",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prep Context": {
+            "main": [
+                [
+                    {
+                        "node": "Google Gemini",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Google Gemini": {
+            "main": [
+                [
+                    {
+                        "node": "Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}
