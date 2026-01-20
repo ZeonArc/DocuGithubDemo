@@ -1,0 +1,136 @@
+{
+    "name": "DocuGithub 1: Analyze",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "webhook/analyze",
+                "options": {}
+            },
+            "id": "webhook-analyze",
+            "name": "Webhook: Analyze",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                460,
+                340
+            ]
+        },
+        {
+            "parameters": {
+                "table": "documentation_sessions",
+                "updateKey": "id",
+                "columns": "status",
+                "value": "analyzing"
+            },
+            "id": "supabase-update-analyzing",
+            "name": "Supabase: Analyzing",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                680,
+                340
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_CREDENTIALS",
+                    "name": "Supabase Account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "url": "=https://api.github.com/repos/{{$json.body.owner}}/{{$json.body.repo}}/zipball",
+                "responseFormat": "file",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "options": {}
+            },
+            "id": "github-download-zip",
+            "name": "GitHub: Download Zip",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 3,
+            "position": [
+                900,
+                340
+            ],
+            "credentials": {
+                "httpHeaderAuth": {
+                    "id": "YOUR_GITHUB_CREDENTIALS",
+                    "name": "GitHub Token"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "decompress",
+                "fileProperty": "data"
+            },
+            "id": "unzip-repo",
+            "name": "Compression: Unzip",
+            "type": "n8n-nodes-base.compression",
+            "typeVersion": 1,
+            "position": [
+                1120,
+                340
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const files = $input.all().map(item => item.json.fileName).filter(f => f.endsWith('.md') || f.endsWith('.json') || f.endsWith('.ts'));\nreturn { json: { fileStructure: files.join('\\n') } };"
+            },
+            "id": "extract-structure",
+            "name": "Code: Extract Structure",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 1,
+            "position": [
+                1340,
+                340
+            ]
+        },
+        {
+            "parameters": {
+                "modelId": "models/gemini-1.5-pro",
+                "prompt": "=Analyze this file structure and generate a comprehensive summary of the project. Suggest 3 key topics for documentation.\n\nStructure:\n{{ $json.fileStructure }}"
+            },
+            "id": "gemini-analyze",
+            "name": "Gemini: Analyze",
+            "type": "n8n-nodes-base.googleGemini",
+            "typeVersion": 1,
+            "position": [
+                1560,
+                340
+            ]
+        },
+        {
+            "parameters": {
+                "table": "documentation_sessions",
+                "updateKey": "id",
+                "columns": "analysis_summary, status",
+                "value": "={{ $json.text }}, analyzed"
+            },
+            "id": "supabase-save-analysis",
+            "name": "Supabase: Save Analysis",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                1780,
+                340
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={ \"summary\": \"{{ $json.text }}\" }"
+            },
+            "id": "respond-analyze",
+            "name": "Respond",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                2000,
+                340
+            ]
+        }
+    ]
+}
