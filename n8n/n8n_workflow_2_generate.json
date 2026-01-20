@@ -1,5 +1,5 @@
 {
-    "name": "DocuGithub 2: Generate",
+    "name": "DocuGithub 2: Generate (Enhanced)",
     "nodes": [
         {
             "parameters": {
@@ -34,7 +34,7 @@
         {
             "parameters": {
                 "modelId": "models/gemini-1.5-pro",
-                "prompt": "=Using the following analysis summary, generate a complete README.md.\n\nSummary:\n{{ $json.analysis_summary }}\n\nUser Config:\nStyle: {{ $json.config.style }}\nTopics: {{ $json.config.topics }}\n\nOutput only Markdown."
+                "prompt": "=You are an expert Technical Writer. Generate a professional README.md.\n\nContext:\n{{ $json.analysis_summary }}\n\nUser Configuration:\n- Style: {{ $json.config.style }} (If 'detailed', use deep explanations. If 'simple', use concise bullet points).\n- Key Topics to Include: {{ $json.config.topics }}\n- Reference Images (Include these URLS in relevant sections): {{ $json.config.images }}\n\nRequirements:\n1. Use standard Markdown formatting.\n2. Include a Title and Description.\n3. Add a Table of Contents.\n4. Include Badges (License, Tech Stack).\n5. Code blocks must have language tags.\n6. Output ONLY the raw Markdown string, no wrapping JSON."
             },
             "id": "gemini-generate",
             "name": "Gemini: Generate",

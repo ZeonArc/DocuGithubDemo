@@ -1,5 +1,5 @@
 {
-    "name": "DocuGithub 1: Analyze",
+    "name": "DocuGithub 1: Analyze (Enhanced)",
     "nodes": [
         {
             "parameters": {
@@ -44,7 +44,11 @@
                 "responseFormat": "file",
                 "authentication": "genericCredentialType",
                 "genericAuthType": "httpHeaderAuth",
-                "options": {}
+                "options": {
+                    "redirect": {
+                        "redirect": true
+                    }
+                }
             },
             "id": "github-download-zip",
             "name": "GitHub: Download Zip",
@@ -77,10 +81,10 @@
         },
         {
             "parameters": {
-                "jsCode": "const files = $input.all().map(item => item.json.fileName).filter(f => f.endsWith('.md') || f.endsWith('.json') || f.endsWith('.ts'));\nreturn { json: { fileStructure: files.join('\\n') } };"
+                "jsCode": "const files = $input.all().map(item => item.json.fileName);\nconst filtered = files.filter(f => \n  !f.includes('node_modules/') && \n  !f.includes('.git/') && \n  !f.includes('dist/') &&\n  !f.includes('.ico') &&\n  (f.endsWith('.ts') || f.endsWith('.tsx') || f.endsWith('.js') || f.endsWith('.jsx') || f.endsWith('.json') || f.endsWith('.md') || f.endsWith('.py') || f.endsWith('.go'))\n);\nreturn { json: { fileStructure: filtered.join('\\n') } };"
             },
             "id": "extract-structure",
-            "name": "Code: Extract Structure",
+            "name": "Code: Filter & Extract",
             "type": "n8n-nodes-base.code",
             "typeVersion": 1,
             "position": [
@@ -91,7 +95,7 @@
         {
             "parameters": {
                 "modelId": "models/gemini-1.5-pro",
-                "prompt": "=Analyze this file structure and generate a comprehensive summary of the project. Suggest 3 key topics for documentation.\n\nStructure:\n{{ $json.fileStructure }}"
+                "prompt": "=You are a Senior Software Architect. Analyze this file structure and generate a comprehensive technical summary.\n\nFile Structure:\n{{ $json.fileStructure }}\n\nOutput requirements:\n1. Tech Stack Inference\n2. Key Modules/Components\n3. Architecture Pattern (MVC, Microservices, etc.)\n\nKeep it concise but technical."
             },
             "id": "gemini-analyze",
             "name": "Gemini: Analyze",

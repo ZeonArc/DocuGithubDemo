@@ -1,132 +1,136 @@
-import Layout from "@/components/Layout";
-import AnimationLayout from "@/components/AnimationLayout";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import { useAppStore } from "@/store/useAppStore";
+import { supabase } from "@/lib/supabase";
+import { Sparkles, CheckCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function Generating() {
     const navigate = useNavigate();
-    const { setGeneratedDoc, repoUrl, githubToken } = useAppStore(); // Get repo details
-    const [log, setLog] = useState<string[]>([]);
-    const logContainerRef = useRef<HTMLDivElement>(null);
+    const { sessionId, setGeneratedDoc } = useAppStore();
+    const [progress, setProgress] = useState(0);
+    const [status, setStatus] = useState("Initializing...");
+    const [isComplete, setIsComplete] = useState(false);
 
     useEffect(() => {
-        // Visual Logs (Simulated for UX)
-        const steps = [
-            "Initializing Gemini 1.5 Pro...",
-            "Connecting to n8n backend...",
-            "Fetching repository metadata...",
-            "Analyzing file structure...",
-            "Drafting documentation...",
-            "Finalizing Markdown..."
-        ];
+        if (!sessionId) {
+            navigate('/');
+            return;
+        }
 
-        let stepIndex = 0;
-        const logInterval = setInterval(() => {
-            if (stepIndex < steps.length) {
-                setLog(prev => [...prev, steps[stepIndex]]);
-                stepIndex++;
-                if (logContainerRef.current) {
-                    logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
-                }
-            }
-        }, 1500);
-
-        // Actual Backend Call
         const generateDocs = async () => {
             try {
-                const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
-                if (!webhookUrl) {
-                    throw new Error("Missing VITE_N8N_WEBHOOK_URL");
-                }
+                // Progress simulation with status updates
+                const steps = [
+                    { progress: 10, status: "Loading configuration..." },
+                    { progress: 25, status: "Processing analysis..." },
+                    { progress: 40, status: "Generating structure..." },
+                    { progress: 60, status: "Writing content..." },
+                    { progress: 80, status: "Adding details..." },
+                    { progress: 95, status: "Finalizing..." },
+                ];
 
-                setLog(prev => [...prev, "Sending request to n8n workflow..."]);
+                // Call n8n generate webhook
+                const webhookBase = import.meta.env.VITE_N8N_WEBHOOK_BASE;
 
-                const response = await fetch(webhookUrl, {
+                // Start progress animation
+                let stepIndex = 0;
+                const progressInterval = setInterval(() => {
+                    if (stepIndex < steps.length) {
+                        setProgress(steps[stepIndex].progress);
+                        setStatus(steps[stepIndex].status);
+                        stepIndex++;
+                    }
+                }, 1500);
+
+                const response = await fetch(`${webhookBase}/generate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ repoUrl, githubToken })
+                    body: JSON.stringify({ sessionId })
                 });
 
-                if (!response.ok) {
-                    throw new Error(`Backend error: ${response.statusText}`);
+                clearInterval(progressInterval);
+
+                if (!response.ok) throw new Error('Generation failed');
+
+                const result = await response.json();
+
+                // Save to store
+                if (result.markdown) {
+                    setGeneratedDoc(result.markdown);
                 }
 
-                const data = await response.json();
-
-                if (data.markdown) {
-                    setGeneratedDoc(data.markdown);
-                    navigate("/editor");
-                } else {
-                    throw new Error("Invalid response format");
-                }
+                setProgress(100);
+                setStatus("Complete!");
+                setIsComplete(true);
 
             } catch (error) {
-                console.error("Generation failed:", error);
-                setLog(prev => [...prev, `Error: ${error instanceof Error ? error.message : 'Unknown error'}`]);
-                // Fallback for demo if n8n is offline
-                setTimeout(() => {
-                    setLog(prev => [...prev, "Falling back to demo mode..."]);
-                    setGeneratedDoc(`# DocuGithub (Demo Mode)
+                console.error('Generation error:', error);
+                // Fallback: Load from Supabase or use placeholder
+                const { data } = await supabase
+                    .from('documentation_sessions')
+                    .select('final_markdown')
+                    .eq('id', sessionId)
+                    .single();
 
-> **Note**: Connection to n8n failed. This is a generated demo.
+                if (data?.final_markdown) {
+                    setGeneratedDoc(data.final_markdown);
+                } else {
+                    setGeneratedDoc(`# Project Documentation\n\nThis documentation was generated by DocuGithub.\n\n## Getting Started\n\nWelcome to your project documentation!\n\n## Installation\n\n\`\`\`bash\nnpm install\n\`\`\`\n\n## Usage\n\nDescribe how to use your project here.\n\n## Contributing\n\nContributions are welcome!\n\n## License\n\nMIT`);
+                }
 
-## Overview
-DocuGithub is a powerful tool to generate documentation.
-
-## Installation
-\`\`\`bash
-npm install docugithub
-\`\`\`
-`);
-                    navigate("/editor");
-                }, 3000);
-            } finally {
-                clearInterval(logInterval);
+                setProgress(100);
+                setStatus("Complete!");
+                setIsComplete(true);
             }
         };
 
-        // Start generation
         generateDocs();
+    }, [sessionId, navigate, setGeneratedDoc]);
 
-        return () => clearInterval(logInterval);
-    }, [navigate, setGeneratedDoc, repoUrl, githubToken]);
+    const handleContinue = () => {
+        navigate('/editor');
+    };
 
     return (
-        <Layout>
-            <AnimationLayout>
-                <div className="container flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
-                    <div className="space-y-6 text-center">
-                        <div className="relative mx-auto h-24 w-24">
-                            <div className="absolute inset-0 rounded-full border-t-4 border-primary animate-spin"></div>
-                            <div className="absolute inset-2 rounded-full border-r-4 border-primary/30 animate-spin reverse"></div>
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="text-xl font-bold animate-pulse">AI</span>
-                            </div>
-                        </div>
-                        <h2 className="text-2xl font-bold">Generating Documentation</h2>
-
-                        <div ref={logContainerRef} className="h-48 w-full max-w-md overflow-hidden overflow-y-auto bg-black/40 rounded-lg p-4 text-left font-mono text-sm border border-border/50 shadow-inner">
-                            {log.map((line, i) => (
-                                <motion.div
-                                    key={i}
-                                    initial={{ opacity: 0, x: -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    className="mb-1 text-green-400/90"
-                                >
-                                    <span className="text-muted-foreground mr-2">&gt;</span>{line}
-                                </motion.div>
-                            ))}
-                            <motion.div
-                                animate={{ opacity: [0, 1, 0] }}
-                                transition={{ repeat: Infinity, duration: 0.8 }}
-                                className="inline-block w-2 h-4 bg-primary ml-1"
-                            />
-                        </div>
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+            <div className="w-full max-w-md space-y-8 text-center">
+                <div className="space-y-4">
+                    <div className="relative inline-flex">
+                        {isComplete ? (
+                            <CheckCircle className="w-20 h-20 text-green-500" />
+                        ) : (
+                            <>
+                                <Sparkles className="w-20 h-20 text-primary animate-pulse" />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="w-24 h-24 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                                </div>
+                            </>
+                        )}
                     </div>
+                    <h1 className="text-3xl font-bold">
+                        {isComplete ? "Documentation Ready!" : "Generating Documentation"}
+                    </h1>
+                    <p className="text-muted-foreground">{status}</p>
                 </div>
-            </AnimationLayout>
-        </Layout>
+
+                {/* Progress Bar */}
+                <div className="space-y-2">
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-gradient-to-r from-primary to-primary/50 transition-all duration-500 ease-out"
+                            style={{ width: `${progress}%` }}
+                        />
+                    </div>
+                    <p className="text-sm text-muted-foreground">{progress}%</p>
+                </div>
+
+                {isComplete && (
+                    <Button onClick={handleContinue} className="w-full h-12">
+                        Open in Editor
+                    </Button>
+                )}
+            </div>
+        </div>
     );
 }

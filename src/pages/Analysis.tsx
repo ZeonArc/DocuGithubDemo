@@ -1,75 +1,147 @@
-import Layout from "@/components/Layout";
-import AnimationLayout from "@/components/AnimationLayout";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { useAppStore } from "@/store/useAppStore";
+import { Loader2, CheckCircle, AlertCircle, Github, FileCode, Brain } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+interface AnalysisStep {
+    id: string;
+    label: string;
+    status: 'pending' | 'loading' | 'complete' | 'error';
+    icon: React.ReactNode;
+}
 
 export default function Analysis() {
     const navigate = useNavigate();
-    const [status, setStatus] = useState("Connecting to GitHub...");
-    const [progress, setProgress] = useState(0);
+    const { sessionId, repoUrl, githubToken } = useAppStore();
+    const [steps, setSteps] = useState<AnalysisStep[]>([
+        { id: 'fetch', label: 'Fetching repository...', status: 'pending', icon: <Github className="w-5 h-5" /> },
+        { id: 'extract', label: 'Extracting files...', status: 'pending', icon: <FileCode className="w-5 h-5" /> },
+        { id: 'analyze', label: 'Analyzing with AI...', status: 'pending', icon: <Brain className="w-5 h-5" /> },
+    ]);
+    const [error, setError] = useState<string | null>(null);
+    const [analysisComplete, setAnalysisComplete] = useState(false);
 
     useEffect(() => {
-        // Simulate analysis process
-        const timers = [
-            setTimeout(() => { setStatus("Fetching repository zipball..."); setProgress(20); }, 1000),
-            setTimeout(() => { setStatus("Extracting file structure..."); setProgress(40); }, 2500),
-            setTimeout(() => { setStatus("Reading README and package files..."); setProgress(60); }, 3500),
-            setTimeout(() => { setStatus("Sending context to Gemini API..."); setProgress(80); }, 5000),
-            setTimeout(() => { setStatus("Analysis Complete!"); setProgress(100); }, 7000),
-            setTimeout(() => { navigate("/config"); }, 8000),
-        ];
+        if (!sessionId || !repoUrl) {
+            navigate('/');
+            return;
+        }
 
-        return () => timers.forEach(clearTimeout);
-    }, [navigate]);
+        const runAnalysis = async () => {
+            try {
+                // Step 1: Fetch
+                setSteps(prev => prev.map(s => s.id === 'fetch' ? { ...s, status: 'loading' } : s));
+
+                // Parse owner/repo
+                const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+                const owner = match?.[1] || '';
+                const repo = match?.[2]?.replace(/\.git$/, '') || '';
+
+                // Call n8n analyze webhook
+                const webhookBase = import.meta.env.VITE_N8N_WEBHOOK_BASE;
+                const response = await fetch(`${webhookBase}/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId,
+                        owner,
+                        repo,
+                        githubToken
+                    })
+                });
+
+                setSteps(prev => prev.map(s => s.id === 'fetch' ? { ...s, status: 'complete' } : s));
+
+                // Step 2: Extract (simulated - n8n handles this)
+                setSteps(prev => prev.map(s => s.id === 'extract' ? { ...s, status: 'loading' } : s));
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                setSteps(prev => prev.map(s => s.id === 'extract' ? { ...s, status: 'complete' } : s));
+
+                // Step 3: Analyze
+                setSteps(prev => prev.map(s => s.id === 'analyze' ? { ...s, status: 'loading' } : s));
+
+                if (!response.ok) {
+                    throw new Error('Analysis failed');
+                }
+
+                await response.json();
+                setSteps(prev => prev.map(s => s.id === 'analyze' ? { ...s, status: 'complete' } : s));
+
+                setAnalysisComplete(true);
+
+            } catch (err) {
+                console.error('Analysis error:', err);
+                setError('Failed to analyze repository. Please try again.');
+                setSteps(prev => prev.map(s => s.status === 'loading' ? { ...s, status: 'error' } : s));
+            }
+        };
+
+        runAnalysis();
+    }, [sessionId, repoUrl, githubToken, navigate]);
+
+    const handleContinue = () => {
+        navigate('/config');
+    };
 
     return (
-        <Layout>
-            <AnimationLayout>
-                <div className="container flex flex-col items-center justify-center min-h-[calc(100vh-200px)] gap-8">
-                    <div className="text-center space-y-2">
-                        <h2 className="text-2xl font-bold tracking-tight">Analyzing Repository</h2>
-                        <p className="text-muted-foreground">{status}</p>
-                    </div>
-
-                    <div className="relative w-full max-w-md h-2 bg-secondary rounded-full overflow-hidden">
-                        <motion.div
-                            className="h-full bg-primary"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${progress}%` }}
-                            transition={{ duration: 0.5 }}
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-lg mt-8">
-                        {progress > 20 && (
-                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 text-sm text-green-500">
-                                <CheckCircle2 className="h-4 w-4" /> Repository Found
-                            </motion.div>
-                        )}
-                        {progress > 40 && (
-                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 text-sm text-green-500">
-                                <CheckCircle2 className="h-4 w-4" /> Files Extracted
-                            </motion.div>
-                        )}
-                        {progress > 60 && (
-                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 text-sm text-green-500">
-                                <CheckCircle2 className="h-4 w-4" /> Structure Parsed
-                            </motion.div>
-                        )}
-                        {progress > 80 && (
-                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 text-sm text-green-500">
-                                <CheckCircle2 className="h-4 w-4" /> AI Context Ready
-                            </motion.div>
-                        )}
-                    </div>
-
-                    {progress < 100 && (
-                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/50" />
-                    )}
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+            <div className="w-full max-w-md space-y-8">
+                <div className="text-center space-y-2">
+                    <h1 className="text-3xl font-bold">Analyzing Repository</h1>
+                    <p className="text-muted-foreground">
+                        We're scanning your code to understand its structure
+                    </p>
                 </div>
-            </AnimationLayout>
-        </Layout>
+
+                <div className="bg-card border rounded-xl p-6 space-y-4">
+                    {steps.map((step) => (
+                        <div
+                            key={step.id}
+                            className={`flex items-center gap-4 p-4 rounded-lg transition-all ${step.status === 'complete' ? 'bg-green-500/10' :
+                                step.status === 'loading' ? 'bg-primary/10' :
+                                    step.status === 'error' ? 'bg-red-500/10' :
+                                        'bg-muted/50'
+                                }`}
+                        >
+                            <div className={`${step.status === 'complete' ? 'text-green-500' :
+                                step.status === 'loading' ? 'text-primary' :
+                                    step.status === 'error' ? 'text-red-500' :
+                                        'text-muted-foreground'
+                                }`}>
+                                {step.status === 'loading' ? (
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : step.status === 'complete' ? (
+                                    <CheckCircle className="w-5 h-5" />
+                                ) : step.status === 'error' ? (
+                                    <AlertCircle className="w-5 h-5" />
+                                ) : (
+                                    step.icon
+                                )}
+                            </div>
+                            <span className={`flex-1 ${step.status === 'complete' ? 'text-green-500' :
+                                step.status === 'loading' ? 'text-foreground' :
+                                    step.status === 'error' ? 'text-red-500' :
+                                        'text-muted-foreground'
+                                }`}>
+                                {step.label}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+
+                {error && (
+                    <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500 text-sm">
+                        {error}
+                    </div>
+                )}
+
+                {analysisComplete && (
+                    <Button onClick={handleContinue} className="w-full h-12">
+                        Continue to Configuration
+                    </Button>
+                )}
+            </div>
+        </div>
     );
 }

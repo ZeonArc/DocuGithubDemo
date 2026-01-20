@@ -14,6 +14,9 @@ interface AppState {
     setGeneratedDoc: (doc: string) => void;
     themeVariant: 'cosmic' | 'sunset';
     setThemeVariant: (variant: 'cosmic' | 'sunset') => void;
+
+    sessionId: string | null;
+    setSessionId: (id: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -30,4 +33,7 @@ export const useAppStore = create<AppState>((set) => ({
     setGeneratedDoc: (doc) => set({ generatedDoc: doc }),
     themeVariant: 'cosmic',
     setThemeVariant: (variant) => set({ themeVariant: variant }),
+
+    sessionId: null,
+    setSessionId: (id) => set({ sessionId: id }),
 }));

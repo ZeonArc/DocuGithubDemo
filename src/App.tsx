@@ -5,6 +5,7 @@ import Config from "./pages/Config";
 import Generating from "./pages/Generating";
 import Editor from "./pages/Editor";
 import Analysis from "./pages/Analysis";
+import RepoInit from "./pages/RepoInit";
 import { AnimatePresence } from "framer-motion";
 
 function AnimatedRoutes() {
@@ -13,6 +14,7 @@ function AnimatedRoutes() {
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<Landing />} />
+        <Route path="/:owner/:repo" element={<RepoInit />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/analysis" element={<Analysis />} />
         <Route path="/config" element={<Config />} />
