@@ -39,7 +39,7 @@ A step-by-step guide to configure DocuGithub's n8n workflows for production.
 ```
 Name: Supabase (or any name you prefer)
 Host: https://utubdvdpyqxtfuxkfamn.supabase.co
-Service Role Key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... (your full key)
+Service Role Key: your_service_role_key_here
 ```
 
 4. Click **Save**

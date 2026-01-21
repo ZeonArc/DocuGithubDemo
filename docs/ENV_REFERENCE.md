@@ -101,7 +101,7 @@ Both frontend and n8n must use the **same secret value**:
 # Generate secret
 openssl rand -hex 32
 
-# Output example: c041388dc9a306dc0b5b0fe3024995ea16750f3c49724b8aa5245e72c08514fd
+# Output example: your_generated_32_character_hex_secret
 ```
 
 Then add to:

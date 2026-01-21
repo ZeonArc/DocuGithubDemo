@@ -17,7 +17,7 @@ VITE_WEBHOOK_SECRET=your_32_character_random_secret_here
 # SUPABASE CONFIGURATION
 # ============================================
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...your_anon_key
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 
 # ============================================
 # AUTH0 CONFIGURATION
@@ -95,7 +95,7 @@ Example: `https://utubdvdpyqxtfuxkfamn.supabase.co`
 
 > ⚠️ This is the PUBLIC key, safe to use in frontend
 
-Example: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0dWJkdmRweXF4dGZ1eGtmYW1uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MTgwMDAwMDAwMH0.xxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+Example: `your_supabase_anon_key_here`
 
 ---
 
