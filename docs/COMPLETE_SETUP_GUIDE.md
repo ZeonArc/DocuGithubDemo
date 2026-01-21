@@ -320,7 +320,7 @@ Create or update `.env` in your project root:
 # Auth0 Configuration
 VITE_AUTH0_DOMAIN=your-tenant.auth0.com
 VITE_AUTH0_CLIENT_ID=your_client_id
-VITE_AUTH0_AUDIENCE=https://docugithub.api
+VITE_AUTH0_AUDIENCE=https://docugithub-auth.eu.auth0.com/api/v2/
 
 # n8n Configuration
 VITE_N8N_WEBHOOK_BASE=http://localhost:5678/webhook
