@@ -1,119 +1,95 @@
-# n8n Setup Guide — Built-in Nodes Only
+# n8n Workflow Setup Guide
 
-This guide uses **ONLY n8n built-in nodes** (no custom/community plugins).
+This guide explains how to set up the DocuGithub n8n workflow with Auth0 JWT validation and LangChain Gemini integration.
+
+## Prerequisites
+
+- **n8n** v2.3+ running locally or via Docker
+- **Auth0** account with an API configured
+- **GitHub OAuth App** for repository access
+- **Google Gemini API Key** from [AI Studio](https://aistudio.google.com/app/apikey)
+- **Supabase** project with `documentation_sessions` table
 
 ---
 
-## 📋 Prerequisites
+## Quick Start
 
-- n8n installed (Docker or npm)
-- GitHub account
-- Google AI Studio account (for Gemini API key)
-- Supabase project
+### 1. Start n8n
 
----
-
-## 🚀 Step 1: Start n8n
-
+**Docker:**
 ```bash
-# Docker (recommended)
-docker run -it --rm --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n n8nio/n8n
-
-# Or npm
-npm install n8n -g && n8n start
+docker run -it --rm \
+  -p 5678:5678 \
+  -v n8n_data:/home/node/.n8n \
+  n8nio/n8n
 ```
 
-Open: `http://localhost:5678`
+**npm:**
+```bash
+npx n8n
+```
+
+Access n8n at: `http://localhost:5678`
 
 ---
 
-## 🔐 Step 2: Create GitHub OAuth App
+### 2. Create Credentials
 
-### 2.1 Create OAuth App on GitHub
+#### Google Gemini (PaLM) API
+1. Go to **Settings → Credentials → Add Credential**
+2. Search: **Google Gemini(PaLM) Api**
+3. Enter your API key from [AI Studio](https://aistudio.google.com/app/apikey)
+4. Save as "Google Gemini(PaLM) Api account"
 
-1. Go to **[GitHub Developer Settings → OAuth Apps](https://github.com/settings/developers)**
-2. Click **New OAuth App**
-3. Fill in:
+#### GitHub OAuth2
+1. Create a GitHub OAuth App at [GitHub Developer Settings](https://github.com/settings/developers)
+   - Authorization callback URL: `http://localhost:5678/rest/oauth2-credential/callback`
+2. In n8n: **Settings → Credentials → Add Credential → GitHub OAuth2 API**
+3. Enter Client ID and Client Secret
+4. Click **Connect** to authorize
 
-| Field | Value |
-|-------|-------|
-| Application name | `DocuGithub n8n` |
-| Homepage URL | `http://localhost:5678` |
-| Authorization callback URL | `http://localhost:5678/rest/oauth2-credential/callback` |
-
-4. Click **Register application**
-5. Copy **Client ID**
-6. Click **Generate a new client secret** → Copy it
-
-### 2.2 Create GitHub OAuth2 Credential in n8n
-
-1. In n8n: **Settings → Credentials → Add Credential**
-2. Search: **GitHub OAuth2 API**
-3. Fill in:
-   - **Client ID**: (from GitHub)
-   - **Client Secret**: (from GitHub)
-4. Click **Connect** — A GitHub authorization page opens
-5. Click **Authorize** → You'll be redirected back to n8n
-6. Click **Save**
-
-> ✅ Now the credential shows "Connected" — n8n has your GitHub access!
-
----
-
-## 🔑 Step 3: Create Gemini API Credential
-
-### 3.1 Get Gemini API Key
-
-1. Go to **[Google AI Studio](https://aistudio.google.com/app/apikey)**
-2. Click **Create API Key**
-3. Copy the key
-
-### 3.2 Create Query Auth Credential in n8n
-
-1. In n8n: **Settings → Credentials → Add Credential**
-2. Search: **Query Auth**
-3. Fill in:
-   - **Name**: `key`
-   - **Value**: `YOUR_GEMINI_API_KEY`
-4. **Save** as "Gemini API Key"
-
----
-
-## 🗄️ Step 4: Create Supabase Credential
-
-1. In n8n: **Settings → Credentials → Add Credential**
-2. Search: **Supabase API**
-3. Fill in:
+#### Supabase
+1. In n8n: **Settings → Credentials → Add Credential → Supabase API**
+2. Enter:
    - **Host**: `https://your-project.supabase.co`
-   - **Service Role Key**: From Supabase Dashboard → Settings → API → `service_role`
-
-> ⚠️ Use `service_role` key (bypasses RLS for backend operations)
+   - **Service Role Key**: From Supabase Dashboard → Settings → API
 
 ---
 
-## 📥 Step 5: Import Workflow
+### 3. Import Workflow
 
-1. Download `n8n/n8n_workflow_complete.json` from your project
-2. In n8n: **Workflows → Import from File**
-3. Select the JSON
-4. Click **Import**
-
----
-
-## ✏️ Step 6: Update Credential References
-
-After import, each node shows red credential errors. Fix each:
-
-1. Click on each **GitHub** node → Select your "GitHub OAuth2" credential
-2. Click on each **Gemini** (HTTP Request) node → Select your "Gemini API Key" credential
-3. Click on each **Supabase** node → Select your "Supabase" credential
+1. In n8n: **Workflows → Import from File**
+2. Select: `n8n/docugithub_langchain.json`
+3. The workflow will open in the editor
 
 ---
 
-## ⚡ Step 7: Activate & Get Webhook URLs
+### 4. Configure the Workflow
 
-1. Toggle workflow to **Active** (top-right)
-2. Click each Webhook node and copy the **Webhook URL**:
+#### Replace Auth0 Domain
+Find and replace in all `Auth0: Verify` nodes:
+```
+YOUR_AUTH0_TENANT.auth0.com → your-tenant.auth0.com
+```
+
+#### Update Credential References
+Click each node and select your credentials:
+- **Gemini nodes** → Select your "Google Gemini(PaLM) Api account"
+- **GitHub nodes** → Select your "GitHub OAuth2"
+- **Supabase nodes** → Select your "Supabase"
+
+#### Verify AI Connections
+Ensure each `Gemini` node connects to its `LLM Chain` with a **purple AI line**:
+- `Gemini (Analyze)` → `LLM Chain: Analyze`
+- `Gemini (Generate)` → `LLM Chain: Generate`
+- `Gemini (Edit)` → `LLM Chain: Edit`
+
+---
+
+### 5. Activate & Get Webhook URLs
+
+1. Toggle the workflow to **Active**
+2. Open each Webhook node to see your URLs:
    - `/webhook/analyze`
    - `/webhook/generate`
    - `/webhook/publish`
@@ -121,83 +97,135 @@ After import, each node shows red credential errors. Fix each:
 
 ---
 
-## 🧪 Step 8: Test Webhooks
+## Workflow Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         ANALYZE PIPELINE                             │
+├─────────────────────────────────────────────────────────────────────┤
+│ Webhook → Auth0 → IF → Supabase → GitHub → Zip → Extract → Filter  │
+│                                                          ↓          │
+│                     Respond ← Supabase ← LLM Chain ← Gemini (AI)    │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                         GENERATE PIPELINE                            │
+├─────────────────────────────────────────────────────────────────────┤
+│ Webhook → Auth0 → IF → Supabase (Get) → LLM Chain ← Gemini (AI)     │
+│                                              ↓                       │
+│                               Respond ← Supabase (Save)              │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                         PUBLISH PIPELINE                             │
+├─────────────────────────────────────────────────────────────────────┤
+│ Webhook → Auth0 → IF → GitHub (Check) → IF (Exists?)                │
+│                                          ↓         ↓                │
+│                                      Update     Create              │
+│                                          ↓         ↓                │
+│                               Respond ← Supabase (Merge)            │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                         AI EDIT PIPELINE                             │
+├─────────────────────────────────────────────────────────────────────┤
+│ Webhook → Auth0 → IF → LLM Chain ← Gemini (AI) → Respond            │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Nodes Used
+
+| Node Type | Purpose |
+|-----------|---------|
+| `Webhook` | Receive HTTP POST requests |
+| `HTTP Request` | Auth0 /userinfo validation |
+| `IF` | Route based on auth validity |
+| `Respond to Webhook` | Return JSON responses |
+| `Supabase` | Database operations |
+| `GitHub` | Repository and file operations |
+| `HTTP Request` | Download repo zip |
+| `Compression` | Extract zip files |
+| `Code` | Filter and process files |
+| `Basic LLM Chain` | LangChain processing |
+| `Google Gemini Chat Model` | AI language model |
+
+---
+
+## Testing
+
+### Test with curl
 
 ```bash
+# Get Auth0 token first
+TOKEN="your_auth0_access_token"
+
 # Test Analyze
 curl -X POST http://localhost:5678/webhook/analyze \
   -H "Content-Type: application/json" \
-  -d '{"sessionId":"test-123","owner":"facebook","repo":"react"}'
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"sessionId": "uuid", "owner": "username", "repo": "reponame"}'
 
 # Test Generate
 curl -X POST http://localhost:5678/webhook/generate \
   -H "Content-Type: application/json" \
-  -d '{"sessionId":"test-123"}'
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"sessionId": "uuid"}'
+
+# Test Publish
+curl -X POST http://localhost:5678/webhook/publish \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"sessionId": "uuid", "owner": "username", "repo": "reponame", "content": "# README"}'
+
+# Test AI Edit
+curl -X POST http://localhost:5678/webhook/ai-edit \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"selectedText": "Hello world", "instruction": "Make it formal"}'
 ```
 
 ---
 
-## 🔄 Workflow Architecture
+## Troubleshooting
 
-```
-ANALYZE:  Webhook → Supabase → GitHub → Zip → Extract → Gemini → Supabase → Respond
-GENERATE: Webhook → Supabase × 2 → Gemini → Supabase → Respond
-PUBLISH:  Webhook → GitHub Check → GitHub Update → Supabase → Respond
-AI-EDIT:  Webhook → Gemini → Respond
-```
+### "Node type not found" Error
+Ensure you're using n8n v2.3+. The LangChain nodes (`@n8n/n8n-nodes-langchain.*`) are included by default.
 
----
+### Gemini Not Responding
+1. Verify your API key is correct
+2. Check the AI connection (purple line) from Gemini to LLM Chain
+3. Test with a simple chat workflow first
 
-## 🛠️ Nodes Used (All Built-in)
+### 401 Unauthorized
+1. Verify Auth0 domain is correctly set
+2. Check that the token is valid and not expired
+3. Test the token at `https://your-tenant.auth0.com/userinfo`
 
-| Node Type | Purpose |
-|-----------|---------|
-| `n8n-nodes-base.webhook` | Receive HTTP requests |
-| `n8n-nodes-base.respondToWebhook` | Return HTTP responses |
-| `n8n-nodes-base.httpRequest` | Call Gemini API |
-| `n8n-nodes-base.github` | GitHub OAuth operations |
-| `n8n-nodes-base.supabase` | Database operations |
-| `n8n-nodes-base.compression` | Extract zip files |
-| `n8n-nodes-base.code` | Transform data |
-
-**No community/custom nodes required!**
+### GitHub Operations Failing
+1. Ensure OAuth2 credential is connected
+2. Verify the user has write access to the repository
+3. Check the owner/repo values in the request
 
 ---
 
-## ❗ Troubleshooting
+## Available Workflow Files
 
-| Issue | Solution |
-|-------|----------|
-| "Custom plugin" error | Re-download the latest JSON from this repo |
-| GitHub auth fails | Re-create OAuth app with correct callback URL |
-| Gemini 401 error | Check API key in Query Auth credential |
-| Supabase errors | Use `service_role` key, ensure tables exist |
+| File | Description |
+|------|-------------|
+| `docugithub_langchain.json` | **Recommended** - LangChain + Gemini |
+| `docugithub_v2.json` | Alternative with official Gemini node |
+| `docugithub_builtin_workflow.json` | HTTP Request fallback |
 
 ---
 
-## 🧪 Test Mode for Frontend
+## Frontend Configuration
 
-Since you haven't deployed yet, use this test configuration:
-
-### Frontend `.env` (Development)
+Update your frontend `.env`:
 
 ```env
 VITE_N8N_WEBHOOK_BASE=http://localhost:5678/webhook
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your_anon_key
-VITE_AUTH0_DOMAIN=
-VITE_AUTH0_CLIENT_ID=
 ```
 
-### Bypass Auth0 for Testing
-
-Set these in your frontend code temporarily:
-
-```tsx
-// In src/pages/Landing.tsx - add this for testing
-const SKIP_AUTH = true; // Set to false for production
-
-// When SKIP_AUTH is true, go directly to manual URL entry
-```
-
-This allows you to test the full flow without Auth0 configuration.
+The frontend will automatically send the Auth0 token in the `Authorization` header.

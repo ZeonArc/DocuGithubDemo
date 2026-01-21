@@ -1,0 +1,1318 @@
+{
+    "name": "DocuGithub Complete - Built-in Only",
+    "nodes": [
+        {
+            "parameters": {
+                "content": "## 🔐 AUTH0 VALIDATION\n\nChange AUTH0_DOMAIN below to your tenant:\nhttps://YOUR_TENANT.auth0.com/userinfo\n\nOr use $env.AUTH0_DOMAIN if set.",
+                "height": 140,
+                "width": 300
+            },
+            "id": "sticky-auth0",
+            "name": "Auth0 Note",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                -800,
+                -200
+            ]
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "analyze",
+                "responseMode": "responseNode",
+                "options": {
+                    "rawBody": true
+                }
+            },
+            "id": "webhook-analyze",
+            "name": "Webhook: Analyze",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2.1,
+            "position": [
+                -600,
+                0
+            ],
+            "webhookId": "docugithub-analyze"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "https://YOUR_AUTH0_TENANT.auth0.com/userinfo",
+                "authentication": "none",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "={{ $json.headers.authorization }}"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "neverError": true,
+                            "responseFormat": "json"
+                        }
+                    }
+                }
+            },
+            "id": "auth0-verify-analyze",
+            "name": "Auth0: Verify (Analyze)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.3,
+            "position": [
+                -360,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 3
+                    },
+                    "conditions": [
+                        {
+                            "id": "token-valid",
+                            "leftValue": "={{ $json.sub }}",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-auth-analyze",
+            "name": "IF: Auth Valid?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.3,
+            "position": [
+                -120,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: false, error: 'Unauthorized' }) }}",
+                "options": {
+                    "responseCode": 401
+                }
+            },
+            "id": "respond-401-analyze",
+            "name": "401 Unauthorized",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                -120,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "update",
+                "tableId": "documentation_sessions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "id",
+                            "keyValue": "={{ $('Webhook: Analyze').item.json.body.sessionId }}"
+                        }
+                    ]
+                },
+                "fieldsUi": {
+                    "fieldValues": [
+                        {
+                            "fieldName": "status",
+                            "fieldValue": "analyzing"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-set-analyzing",
+            "name": "Supabase: Set Analyzing",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                120,
+                0
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_CREDENTIAL",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "resource": "repository",
+                "operation": "get",
+                "owner": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $('Webhook: Analyze').item.json.body.owner }}"
+                },
+                "repository": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $('Webhook: Analyze').item.json.body.repo }}"
+                }
+            },
+            "id": "github-get-repo",
+            "name": "GitHub: Get Repo",
+            "type": "n8n-nodes-base.github",
+            "typeVersion": 1.1,
+            "position": [
+                360,
+                0
+            ],
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "YOUR_GITHUB_CREDENTIAL",
+                    "name": "GitHub OAuth2"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "=https://api.github.com/repos/{{ $('Webhook: Analyze').item.json.body.owner }}/{{ $('Webhook: Analyze').item.json.body.repo }}/zipball",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "githubOAuth2Api",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "User-Agent",
+                            "value": "DocuGithub"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "responseFormat": "file"
+                        }
+                    },
+                    "redirect": {
+                        "redirect": {
+                            "followRedirects": true
+                        }
+                    }
+                }
+            },
+            "id": "http-download-zip",
+            "name": "Download Zip",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.3,
+            "position": [
+                600,
+                0
+            ],
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "YOUR_GITHUB_CREDENTIAL",
+                    "name": "GitHub OAuth2"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "decompress",
+                "binaryPropertyName": "data"
+            },
+            "id": "unzip",
+            "name": "Extract Zip",
+            "type": "n8n-nodes-base.compression",
+            "typeVersion": 1,
+            "position": [
+                840,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const items = $input.all();\nconst files = [];\nconst IGNORE = ['node_modules/', '.git/', 'dist/', 'build/', '.next/'];\nconst EXTS = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.json', '.md'];\nfor (const item of items) {\n  const f = item.json.fileName || '';\n  if (IGNORE.some(p => f.includes(p))) continue;\n  if (EXTS.some(ext => f.endsWith(ext))) files.push(f);\n}\nreturn [{ json: { fileStructure: files.slice(0, 100).join('\\n'), count: files.length } }];"
+            },
+            "id": "filter-files",
+            "name": "Filter Files",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1080,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpQueryAuth",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"You are a Senior Software Architect. Analyze this codebase:\\n\\n{{ $json.fileStructure }}\\n\\nProvide: 1. Tech Stack 2. Architecture 3. Key Components 4. Project Type\\n\\nOutput in Markdown.\"\n    }]\n  }]\n}"
+            },
+            "id": "gemini-analyze",
+            "name": "Gemini: Analyze",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.3,
+            "position": [
+                1320,
+                0
+            ],
+            "credentials": {
+                "httpQueryAuth": {
+                    "id": "YOUR_GEMINI_CREDENTIAL",
+                    "name": "Gemini API Key"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "const r = $input.first().json;\nconst text = r.candidates?.[0]?.content?.parts?.[0]?.text || 'Analysis failed';\nreturn [{ json: { analysis: text } }];"
+            },
+            "id": "parse-gemini",
+            "name": "Parse Gemini",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1560,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "update",
+                "tableId": "documentation_sessions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "id",
+                            "keyValue": "={{ $('Webhook: Analyze').item.json.body.sessionId }}"
+                        }
+                    ]
+                },
+                "fieldsUi": {
+                    "fieldValues": [
+                        {
+                            "fieldName": "analysis_summary",
+                            "fieldValue": "={{ $json.analysis }}"
+                        },
+                        {
+                            "fieldName": "status",
+                            "fieldValue": "analyzed"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-save-analysis",
+            "name": "Supabase: Save Analysis",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                1800,
+                0
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_CREDENTIAL",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: true, summary: $json.analysis }) }}",
+                "options": {
+                    "responseCode": 200
+                }
+            },
+            "id": "respond-analyze",
+            "name": "Respond: Analyze",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                2040,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "generate",
+                "responseMode": "responseNode",
+                "options": {
+                    "rawBody": true
+                }
+            },
+            "id": "webhook-generate",
+            "name": "Webhook: Generate",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2.1,
+            "position": [
+                -600,
+                400
+            ],
+            "webhookId": "docugithub-generate"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "https://YOUR_AUTH0_TENANT.auth0.com/userinfo",
+                "authentication": "none",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "={{ $json.headers.authorization }}"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "neverError": true
+                        }
+                    }
+                }
+            },
+            "id": "auth0-verify-generate",
+            "name": "Auth0: Verify (Generate)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.3,
+            "position": [
+                -360,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 3
+                    },
+                    "conditions": [
+                        {
+                            "id": "v",
+                            "leftValue": "={{ $json.sub }}",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-auth-generate",
+            "name": "IF: Auth Valid?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.3,
+            "position": [
+                -120,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: false, error: 'Unauthorized' }) }}",
+                "options": {
+                    "responseCode": 401
+                }
+            },
+            "id": "respond-401-generate",
+            "name": "401 Unauthorized",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                -120,
+                600
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "get",
+                "tableId": "documentation_sessions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "id",
+                            "keyValue": "={{ $('Webhook: Generate').item.json.body.sessionId }}"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-get-session",
+            "name": "Supabase: Get Session",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                120,
+                400
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_CREDENTIAL",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpQueryAuth",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"You are a Technical Writer. Project: {{ $json.analysis_summary }}\\n\\nGenerate a README.md with: Title, Description, Installation, Usage, License.\\n\\nOutput raw Markdown only.\"\n    }]\n  }]\n}"
+            },
+            "id": "gemini-generate",
+            "name": "Gemini: Generate",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.3,
+            "position": [
+                360,
+                400
+            ],
+            "credentials": {
+                "httpQueryAuth": {
+                    "id": "YOUR_GEMINI_CREDENTIAL",
+                    "name": "Gemini API Key"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "const r = $input.first().json;\nconst text = r.candidates?.[0]?.content?.parts?.[0]?.text || '# README';\nreturn [{ json: { markdown: text } }];"
+            },
+            "id": "parse-readme",
+            "name": "Parse README",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                600,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "update",
+                "tableId": "documentation_sessions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "id",
+                            "keyValue": "={{ $('Webhook: Generate').item.json.body.sessionId }}"
+                        }
+                    ]
+                },
+                "fieldsUi": {
+                    "fieldValues": [
+                        {
+                            "fieldName": "final_markdown",
+                            "fieldValue": "={{ $json.markdown }}"
+                        },
+                        {
+                            "fieldName": "status",
+                            "fieldValue": "generated"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-save-doc",
+            "name": "Supabase: Save Doc",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                840,
+                400
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_CREDENTIAL",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: true, markdown: $json.markdown }) }}",
+                "options": {
+                    "responseCode": 200
+                }
+            },
+            "id": "respond-generate",
+            "name": "Respond: Generate",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                1080,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "publish",
+                "responseMode": "responseNode",
+                "options": {
+                    "rawBody": true
+                }
+            },
+            "id": "webhook-publish",
+            "name": "Webhook: Publish",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2.1,
+            "position": [
+                -600,
+                800
+            ],
+            "webhookId": "docugithub-publish"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "https://YOUR_AUTH0_TENANT.auth0.com/userinfo",
+                "authentication": "none",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "={{ $json.headers.authorization }}"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "neverError": true
+                        }
+                    }
+                }
+            },
+            "id": "auth0-verify-publish",
+            "name": "Auth0: Verify (Publish)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.3,
+            "position": [
+                -360,
+                800
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 3
+                    },
+                    "conditions": [
+                        {
+                            "id": "v",
+                            "leftValue": "={{ $json.sub }}",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-auth-publish",
+            "name": "IF: Auth Valid?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.3,
+            "position": [
+                -120,
+                800
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: false, error: 'Unauthorized' }) }}",
+                "options": {
+                    "responseCode": 401
+                }
+            },
+            "id": "respond-401-publish",
+            "name": "401 Unauthorized",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                -120,
+                1000
+            ]
+        },
+        {
+            "parameters": {
+                "resource": "file",
+                "operation": "get",
+                "owner": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $('Webhook: Publish').item.json.body.owner }}"
+                },
+                "repository": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $('Webhook: Publish').item.json.body.repo }}"
+                },
+                "filePath": "README.md"
+            },
+            "id": "github-check-readme",
+            "name": "GitHub: Check README",
+            "type": "n8n-nodes-base.github",
+            "typeVersion": 1.1,
+            "position": [
+                120,
+                800
+            ],
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "YOUR_GITHUB_CREDENTIAL",
+                    "name": "GitHub OAuth2"
+                }
+            },
+            "continueOnFail": true
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 3
+                    },
+                    "conditions": [
+                        {
+                            "id": "e",
+                            "leftValue": "={{ $json.sha }}",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-file-exists",
+            "name": "IF: Exists?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.3,
+            "position": [
+                360,
+                800
+            ]
+        },
+        {
+            "parameters": {
+                "resource": "file",
+                "operation": "edit",
+                "owner": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $('Webhook: Publish').item.json.body.owner }}"
+                },
+                "repository": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $('Webhook: Publish').item.json.body.repo }}"
+                },
+                "filePath": "README.md",
+                "fileContent": "={{ $('Webhook: Publish').item.json.body.content }}",
+                "commitMessage": "docs: Update README via DocuGithub"
+            },
+            "id": "github-update",
+            "name": "GitHub: Update",
+            "type": "n8n-nodes-base.github",
+            "typeVersion": 1.1,
+            "position": [
+                600,
+                700
+            ],
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "YOUR_GITHUB_CREDENTIAL",
+                    "name": "GitHub OAuth2"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "resource": "file",
+                "operation": "create",
+                "owner": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $('Webhook: Publish').item.json.body.owner }}"
+                },
+                "repository": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $('Webhook: Publish').item.json.body.repo }}"
+                },
+                "filePath": "README.md",
+                "fileContent": "={{ $('Webhook: Publish').item.json.body.content }}",
+                "commitMessage": "docs: Create README via DocuGithub"
+            },
+            "id": "github-create",
+            "name": "GitHub: Create",
+            "type": "n8n-nodes-base.github",
+            "typeVersion": 1.1,
+            "position": [
+                600,
+                900
+            ],
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "YOUR_GITHUB_CREDENTIAL",
+                    "name": "GitHub OAuth2"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "update",
+                "tableId": "documentation_sessions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "id",
+                            "keyValue": "={{ $('Webhook: Publish').item.json.body.sessionId }}"
+                        }
+                    ]
+                },
+                "fieldsUi": {
+                    "fieldValues": [
+                        {
+                            "fieldName": "status",
+                            "fieldValue": "published"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-published",
+            "name": "Supabase: Published",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                840,
+                800
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_CREDENTIAL",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: true, message: 'Published!' }) }}",
+                "options": {
+                    "responseCode": 200
+                }
+            },
+            "id": "respond-publish",
+            "name": "Respond: Publish",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                1080,
+                800
+            ]
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "ai-edit",
+                "responseMode": "responseNode",
+                "options": {
+                    "rawBody": true
+                }
+            },
+            "id": "webhook-ai-edit",
+            "name": "Webhook: AI Edit",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2.1,
+            "position": [
+                -600,
+                1200
+            ],
+            "webhookId": "docugithub-ai-edit"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "https://YOUR_AUTH0_TENANT.auth0.com/userinfo",
+                "authentication": "none",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "={{ $json.headers.authorization }}"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "neverError": true
+                        }
+                    }
+                }
+            },
+            "id": "auth0-verify-ai-edit",
+            "name": "Auth0: Verify (AI Edit)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.3,
+            "position": [
+                -360,
+                1200
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 3
+                    },
+                    "conditions": [
+                        {
+                            "id": "v",
+                            "leftValue": "={{ $json.sub }}",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-auth-ai-edit",
+            "name": "IF: Auth Valid?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.3,
+            "position": [
+                -120,
+                1200
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: false, error: 'Unauthorized' }) }}",
+                "options": {
+                    "responseCode": 401
+                }
+            },
+            "id": "respond-401-ai-edit",
+            "name": "401 Unauthorized",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                -120,
+                1400
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpQueryAuth",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Edit: {{ $('Webhook: AI Edit').item.json.body.selectedText }}\\n\\nInstruction: {{ $('Webhook: AI Edit').item.json.body.instruction }}\\n\\nReturn ONLY the edited text.\"\n    }]\n  }]\n}"
+            },
+            "id": "gemini-edit",
+            "name": "Gemini: Edit",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.3,
+            "position": [
+                120,
+                1200
+            ],
+            "credentials": {
+                "httpQueryAuth": {
+                    "id": "YOUR_GEMINI_CREDENTIAL",
+                    "name": "Gemini API Key"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "const r = $input.first().json;\nconst text = r.candidates?.[0]?.content?.parts?.[0]?.text || '';\nreturn [{ json: { editedText: text } }];"
+            },
+            "id": "parse-edit",
+            "name": "Parse Edit",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                360,
+                1200
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: true, editedText: $json.editedText }) }}",
+                "options": {
+                    "responseCode": 200
+                }
+            },
+            "id": "respond-ai-edit",
+            "name": "Respond: AI Edit",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                600,
+                1200
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook: Analyze": {
+            "main": [
+                [
+                    {
+                        "node": "Auth0: Verify (Analyze)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Auth0: Verify (Analyze)": {
+            "main": [
+                [
+                    {
+                        "node": "IF: Auth Valid?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF: Auth Valid?": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Set Analyzing",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "401 Unauthorized",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Set Analyzing": {
+            "main": [
+                [
+                    {
+                        "node": "GitHub: Get Repo",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "GitHub: Get Repo": {
+            "main": [
+                [
+                    {
+                        "node": "Download Zip",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Download Zip": {
+            "main": [
+                [
+                    {
+                        "node": "Extract Zip",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Zip": {
+            "main": [
+                [
+                    {
+                        "node": "Filter Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter Files": {
+            "main": [
+                [
+                    {
+                        "node": "Gemini: Analyze",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini: Analyze": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Gemini",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Gemini": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Save Analysis",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Save Analysis": {
+            "main": [
+                [
+                    {
+                        "node": "Respond: Analyze",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook: Generate": {
+            "main": [
+                [
+                    {
+                        "node": "Auth0: Verify (Generate)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Auth0: Verify (Generate)": {
+            "main": [
+                [
+                    {
+                        "node": "IF: Auth Valid?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Get Session": {
+            "main": [
+                [
+                    {
+                        "node": "Gemini: Generate",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini: Generate": {
+            "main": [
+                [
+                    {
+                        "node": "Parse README",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse README": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Save Doc",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Save Doc": {
+            "main": [
+                [
+                    {
+                        "node": "Respond: Generate",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook: Publish": {
+            "main": [
+                [
+                    {
+                        "node": "Auth0: Verify (Publish)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Auth0: Verify (Publish)": {
+            "main": [
+                [
+                    {
+                        "node": "IF: Auth Valid?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "GitHub: Check README": {
+            "main": [
+                [
+                    {
+                        "node": "IF: Exists?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF: Exists?": {
+            "main": [
+                [
+                    {
+                        "node": "GitHub: Update",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "GitHub: Create",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "GitHub: Update": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Published",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "GitHub: Create": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Published",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Published": {
+            "main": [
+                [
+                    {
+                        "node": "Respond: Publish",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook: AI Edit": {
+            "main": [
+                [
+                    {
+                        "node": "Auth0: Verify (AI Edit)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Auth0: Verify (AI Edit)": {
+            "main": [
+                [
+                    {
+                        "node": "IF: Auth Valid?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini: Edit": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Edit",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Edit": {
+            "main": [
+                [
+                    {
+                        "node": "Respond: AI Edit",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "active": false,
+    "versionId": "5"
+}

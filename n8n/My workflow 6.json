@@ -1,0 +1,754 @@
+{
+  "name": "My workflow 6",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "push",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "63b3d700-a065-45f9-923d-526b593d8c00",
+      "name": "Webhook - Push",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2352,
+        480
+      ],
+      "webhookId": "docugithub-push"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "users",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.user_id }}"
+            }
+          ]
+        }
+      },
+      "id": "b1f416c1-08ef-4244-81a6-ebd65db30e6e",
+      "name": "Fetch User GitHub Token",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1392,
+        288
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "ezdTAc4Yb9xBfZ9e",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare push data\nconst session = $('IF Session Has OAuth User').first().json;\nconst user = $input.first().json;\nconst requestBody = $('IF Signature Valid4').first().json.body;\n\nif (!user.github_token) {\n  return [{ json: { error: true, code: 'NO_TOKEN', message: 'User has no GitHub token configured' } }];\n}\n\n// Decrypt token if encrypted (placeholder - implement based on your encryption)\n// const decryptedToken = decrypt(user.github_token);\nconst githubToken = user.github_token; // Assume stored securely\n\nconst currentVersion = session.current_version || 1;\n\n// Build commit message\nlet commitMessage = requestBody.commit_message;\nif (!commitMessage) {\n  commitMessage = `docs: Update README via DocuGitHub (v${currentVersion})`;\n}\n\nreturn [{ json: {\n  session_id: session.id,\n  owner: session.repo_owner,\n  repo: session.repo_name,\n  default_branch: session.default_branch || 'main',\n  readme_content: requestBody.readme_content,\n  commit_message: commitMessage,\n  github_token: githubToken,\n  user_id: user.id,\n  current_version: currentVersion\n} }];"
+      },
+      "id": "1ff839dd-6587-4066-be53-4638b748b4dd",
+      "name": "Prepare Push Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1168,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "has-token",
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              },
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "true"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e2fee9f3-4d6b-4b51-a3ce-04a8bf8280c2",
+      "name": "IF Has Valid Token",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -944,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process GitHub push response\nconst response = $input.first().json;\nconst pushData = $('Process SHA Response').first().json;\n\nif (response.statusCode === 200 || response.statusCode === 201) {\n  const commit = response.body.commit;\n  \n  return [{ json: {\n    success: true,\n    session_id: pushData.session_id,\n    owner: pushData.owner,\n    repo: pushData.repo,\n    commit_sha: commit.sha,\n    commit_url: commit.html_url,\n    is_new_file: pushData.is_new_file,\n    version: pushData.current_version,\n    user_id: pushData.user_id\n  } }];\n}\n\nif (response.statusCode === 409) {\n  throw new Error('Conflict: README was modified. Please retry with latest version.');\n}\n\nif (response.statusCode === 403) {\n  throw new Error('Permission denied. Token may lack write access to this repository.');\n}\n\nif (response.statusCode === 422) {\n  throw new Error('Validation failed: ' + JSON.stringify(response.body));\n}\n\nthrow new Error(`GitHub API error: ${response.statusCode} - ${JSON.stringify(response.body)}`);"
+      },
+      "id": "842ac3c8-dd11-4f83-878b-d6d972415da5",
+      "name": "Process Push Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.session_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldValue": "pushed"
+            },
+            {
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldValue": "={{ $json.commit_sha }}"
+            },
+            {
+              "fieldValue": "={{ $json.commit_url }}"
+            }
+          ]
+        }
+      },
+      "id": "f9a05420-d529-4ee0-b2df-e01710b180f4",
+      "name": "Update Session - Pushed",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        304,
+        160
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "ezdTAc4Yb9xBfZ9e",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if user has previous completed documents and clean up old versions if needed\nconst pushResult = $('Process Push Response').first().json;\n\n// This is a placeholder for cleanup logic\n// In production, you would:\n// 1. Count user's completed sessions\n// 2. If this is their 2nd+ document, clear old version history\n// 3. Implement retention policy\n\nreturn [{ json: {\n  ...pushResult,\n  cleanup_performed: false\n} }];"
+      },
+      "id": "b1de222c-9ca8-4457-8c32-8936b89f7ba4",
+      "name": "Check Version Cleanup Needed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.NOTIFICATION_WORKFLOW_URL || '' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"event\": \"readme_pushed\",\n  \"session_id\": {{ JSON.stringify($json.session_id) }},\n  \"owner\": {{ JSON.stringify($json.owner) }},\n  \"repo\": {{ JSON.stringify($json.repo) }},\n  \"commit_sha\": {{ JSON.stringify($json.commit_sha) }},\n  \"commit_url\": {{ JSON.stringify($json.commit_url) }},\n  \"version\": {{ $json.version }},\n  \"user_id\": {{ JSON.stringify($json.user_id) }},\n  \"timestamp\": {{ JSON.stringify(new Date().toISOString()) }}\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "f2894f4d-4d55-4d35-80c2-7e6dc6378796",
+      "name": "Trigger Notification Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        752,
+        160
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: true, code: 'AUTH_REQUIRED', message: 'GitHub OAuth authentication required to push. Anonymous users cannot push to repositories.' }) }}",
+        "options": {
+          "responseCode": 401,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "f7ca3562-b53c-459d-b296-e4f748cbef36",
+      "name": "Respond - Auth Required",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -1392,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: true, code: $json.code, message: $json.message }) }}",
+        "options": {
+          "responseCode": 403,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "5f76388e-9e4d-486d-aa8b-0a2a994b6555",
+      "name": "Respond - No Token",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -736,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.body.session_id }}"
+            }
+          ]
+        }
+      },
+      "id": "718a42b4-e1a9-415f-8ac1-b524e3fb2a2d",
+      "name": "Fetch Session1",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1824,
+        384
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "ezdTAc4Yb9xBfZ9e",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, session_id: $('Process Push Response').first().json.session_id, commit_sha: $('Process Push Response').first().json.commit_sha, commit_url: $('Process Push Response').first().json.commit_url }) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "fad4f523-eb84-4e98-b762-d8d727655fb8",
+      "name": "Respond Success5",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        976,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: true, code: 'INVALID_SIGNATURE', message: 'Invalid or missing webhook signature' }) }}",
+        "options": {
+          "responseCode": 401,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "617d4b23-8d98-4320-93b5-f65d74e1ee83",
+      "name": "Respond - Invalid Signature5",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -1824,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## DocuGitHub - Push to GitHub Workflow\n\n**Endpoint:** POST /webhook/push\n\n**Input:**\n```json\n{\n  \"session_id\": \"uuid\",\n  \"readme_content\": \"# Project...\\n...\",\n  \"commit_message\": \"optional custom message\"\n}\n```\n\n**Requirements:**\n- User must be authenticated via GitHub OAuth\n- Session must exist with user_id\n\n**Flow:**\n1. Validate HMAC signature\n2. Fetch session - verify has user_id (OAuth)\n3. Fetch user's GitHub token\n4. Get current README SHA (if exists)\n5. PUT README to GitHub via Contents API\n6. Update session with commit info\n7. Trigger notification workflow\n8. Return commit details\n\n**Commit Message Format:**\n`docs: Update README via DocuGitHub (vN)`\n\n**Output:**\n```json\n{\n  \"success\": true,\n  \"commit_sha\": \"abc123...\",\n  \"commit_url\": \"https://github.com/...\"\n}\n```",
+        "height": 560,
+        "width": 380
+      },
+      "id": "345c090c-2ec5-44fe-a861-fccb28406a13",
+      "name": "Workflow Documentation4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2816,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "sig-valid",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.headers['user-agent'] }}",
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d4993eba-1925-4095-b1f3-799c4cdea348",
+      "name": "IF Signature Valid4",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2096,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "session-exists",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              },
+              "leftValue": "={{ $json.id }}",
+              "rightValue": ""
+            },
+            {
+              "id": "has-user",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              },
+              "leftValue": "={{ $json.user_id }}",
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c6225ec6-f3c3-4b20-805d-7b4085cc501b",
+      "name": "IF Session Has OAuth User",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1616,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "edit",
+        "owner": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "repository": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        -192,
+        32
+      ],
+      "id": "f68bc855-785a-4b57-8630-0a60f91511ce",
+      "name": "Edit a file",
+      "webhookId": "e202fbbb-72a6-4eb3-ab4b-96540c944a5e",
+      "credentials": {
+        "githubApi": {
+          "id": "XvRyytL3ZI7LJBVg",
+          "name": "GitHub account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "get",
+        "owner": {
+          "__rl": true,
+          "value": "https://github.com/D4rk-Pho3nix/porflow-final",
+          "mode": "url"
+        },
+        "repository": {
+          "__rl": true,
+          "value": "https://github.com/D4rk-Pho3nix/porflow-final",
+          "mode": "url"
+        },
+        "filePath": "README.md",
+        "additionalParameters": {}
+      },
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        -736,
+        160
+      ],
+      "id": "3e591c26-67fa-48bd-89e8-0c9353038f32",
+      "name": "Get a file",
+      "webhookId": "35916c52-b00b-4ad7-88d1-1ac217d363b0",
+      "credentials": {
+        "githubApi": {
+          "id": "XvRyytL3ZI7LJBVg",
+          "name": "GitHub account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f317a5b3-94ba-47fa-bdc9-5a4d2c4871f4",
+              "leftValue": "",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -528,
+        160
+      ],
+      "id": "30cba05e-9fdf-43fe-a39d-3844aa026c58",
+      "name": "IF File Exists?"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "owner": {
+          "__rl": true,
+          "mode": "url",
+          "value": "",
+          "__regex": "https:\\/\\/(?:[^/]+)\\/([-_0-9a-zA-Z]+)"
+        },
+        "repository": {
+          "__rl": true,
+          "mode": "url",
+          "value": "",
+          "__regex": "https:\\/\\/(?:[^/]+)\\/(?:[-_0-9a-zA-Z]+)\\/([-_.0-9a-zA-Z]+)"
+        }
+      },
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        -192,
+        336
+      ],
+      "id": "2466d314-e62f-4bca-b675-4c96554bc985",
+      "name": "Create a file",
+      "webhookId": "360737a3-8694-4ed2-ad68-74167409daca",
+      "credentials": {
+        "githubApi": {
+          "id": "XvRyytL3ZI7LJBVg",
+          "name": "GitHub account"
+        }
+      },
+      "disabled": true
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Push": {
+      "main": [
+        [
+          {
+            "node": "IF Signature Valid4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch User GitHub Token": {
+      "main": [
+        [
+          {
+            "node": "Prepare Push Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Push Data": {
+      "main": [
+        [
+          {
+            "node": "IF Has Valid Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Has Valid Token": {
+      "main": [
+        [
+          {
+            "node": "Get a file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - No Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Push Response": {
+      "main": [
+        [
+          {
+            "node": "Update Session - Pushed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Session - Pushed": {
+      "main": [
+        [
+          {
+            "node": "Check Version Cleanup Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Version Cleanup Needed": {
+      "main": [
+        [
+          {
+            "node": "Trigger Notification Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Notification Workflow": {
+      "main": [
+        [
+          {
+            "node": "Respond Success5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Session1": {
+      "main": [
+        [
+          {
+            "node": "IF Session Has OAuth User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Signature Valid4": {
+      "main": [
+        [
+          {
+            "node": "Fetch Session1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Invalid Signature5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Session Has OAuth User": {
+      "main": [
+        [
+          {
+            "node": "Fetch User GitHub Token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Auth Required",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit a file": {
+      "main": [
+        [
+          {
+            "node": "Process Push Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a file": {
+      "main": [
+        [
+          {
+            "node": "IF File Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF File Exists?": {
+      "main": [
+        [
+          {
+            "node": "Edit a file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a file": {
+      "main": [
+        [
+          {
+            "node": "Process Push Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "",
+  "meta": {
+    "instanceId": "67f8529d508b40120728dde97d8d1a3a8b706f2cbfcc1db772e2eef71de4967d"
+  },
+  "id": "BsGfnVM5mB6cVgDOeeaZ0",
+  "tags": []
+}
