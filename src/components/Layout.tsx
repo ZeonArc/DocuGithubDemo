@@ -36,8 +36,9 @@ export default function Layout({ children }: LayoutProps) {
                                 Home
                                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-foreground transition-all group-hover:w-full" />
                             </Link>
-                            <a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-foreground transition-colors">GitHub</a>
                             <Link to="/docs" className="hover:text-foreground transition-colors">Docs</Link>
+                            <Link to="/editor" className="hover:text-foreground transition-colors">Editor</Link>
+                            <a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-foreground transition-colors">GitHub</a>
                         </nav>
 
                         {/* Right Actions */}

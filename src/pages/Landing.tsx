@@ -160,47 +160,49 @@ export default function Landing() {
             {/* Hero Section */}
             <section className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-16">
                 <div className="w-full max-w-4xl flex flex-col items-center text-center">
-                    <div className="mb-6 inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm text-primary backdrop-blur-xl">
+                    <div className="mb-6 inline-flex items-center rounded-full border border-indigo-500/30 bg-indigo-500/10 px-4 py-1.5 text-sm text-indigo-400 backdrop-blur-xl">
                         <Sparkles className="mr-2 h-4 w-4" />
                         <span className="text-xs font-semibold uppercase tracking-wide">AI-Powered Documentation</span>
                     </div>
 
-                    <h1 className="landing-title text-5xl md:text-7xl font-bold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-b from-foreground via-foreground to-foreground/50">
-                        DocuGithub
+                    <h1 className="landing-title text-5xl md:text-7xl font-bold tracking-tight mb-6 text-white">
+                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-indigo-200">
+                            DocuGithub
+                        </span>
                     </h1>
 
-                    <p className="landing-subtitle text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl leading-relaxed">
-                        Transform your GitHub repositories into beautiful, comprehensive documentation in seconds using advanced AI.
+                    <p className="landing-subtitle text-lg md:text-xl text-gray-300 mb-10 max-w-2xl leading-relaxed">
+                        Transform your GitHub repositories into <span className="text-white font-medium">beautiful, comprehensive documentation</span> in seconds using advanced AI.
                     </p>
 
                     <div className="landing-form w-full max-w-lg space-y-4">
                         {!useAuth ? (
-                            <form onSubmit={handleSubmit} className="flex gap-2">
+                            <form onSubmit={handleSubmit} className="flex gap-3">
                                 <Input
                                     placeholder="https://github.com/username/repo"
-                                    className="h-12 bg-background/50 backdrop-blur-xl border-white/10 flex-1"
+                                    className="h-14 bg-gray-900/80 backdrop-blur-xl border-gray-700/50 text-white placeholder:text-gray-500 flex-1 rounded-xl focus:border-indigo-500 focus:ring-indigo-500/20"
                                     value={repoUrl}
                                     onChange={(e) => setRepoUrl(e.target.value)}
                                 />
-                                <Button size="lg" className="h-12 px-6">
+                                <Button size="lg" className="h-14 px-8 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/25 transition-all hover:shadow-indigo-500/40">
                                     Start <ArrowRight className="ml-2 h-4 w-4" />
                                 </Button>
                             </form>
                         ) : (
-                            <div className="bg-background/50 backdrop-blur-xl border border-white/10 rounded-xl p-5">
+                            <div className="bg-gray-900/80 backdrop-blur-xl border border-gray-700/50 rounded-2xl p-6 shadow-xl">
                                 {!isAuthenticated ? (
                                     <div className="text-center py-3">
-                                        <Button onClick={() => loginWithPopup()} size="lg" className="w-full">
+                                        <Button onClick={() => loginWithPopup()} size="lg" className="w-full h-12 bg-gray-800 hover:bg-gray-700 text-white rounded-xl border border-gray-600">
                                             <Github className="mr-2 h-5 w-5" /> Sign in with GitHub
                                         </Button>
-                                        <p className="text-xs text-muted-foreground mt-2">Select from your repositories</p>
+                                        <p className="text-xs text-gray-500 mt-3">Select from your repositories</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
                                         <div className="flex items-center justify-between text-sm px-1">
                                             <div className="flex items-center gap-2">
                                                 <img src={user?.picture} className="w-6 h-6 rounded-full" alt="User" />
-                                                <span className="font-medium">Welcome, {user?.given_name || user?.nickname}</span>
+                                                <span className="font-medium text-white">Welcome, {user?.given_name || user?.nickname}</span>
                                             </div>
                                             <button onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })} className="text-xs text-red-400 hover:underline">Logout</button>
                                         </div>
@@ -214,7 +216,7 @@ export default function Landing() {
                             <div className="flex justify-center pt-2">
                                 <button
                                     onClick={() => setUseAuth(!useAuth)}
-                                    className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-2"
+                                    className="text-sm text-gray-400 hover:text-indigo-400 transition-colors flex items-center gap-2"
                                 >
                                     {useAuth ? (
                                         <><LinkIcon className="w-3 h-3" /> or paste a URL manually</>
@@ -231,28 +233,28 @@ export default function Landing() {
             {/* Features Section */}
             <section className="relative z-10 py-16 px-4">
                 <div className="max-w-5xl mx-auto">
-                    <h2 className="text-2xl font-bold text-center mb-10">Why DocuGithub?</h2>
+                    <h2 className="text-2xl font-bold text-center mb-10 text-white">Why DocuGithub?</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="feature-card p-6 rounded-2xl bg-background/40 backdrop-blur-lg border border-white/5 hover:border-primary/20 transition-colors">
-                            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                                <Zap className="h-6 w-6 text-primary" />
+                        <div className="feature-card p-6 rounded-2xl bg-gray-900/60 backdrop-blur-lg border border-gray-700/50 hover:border-indigo-500/30 transition-all hover:bg-gray-900/80 shadow-lg">
+                            <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center mb-4">
+                                <Zap className="h-6 w-6 text-indigo-400" />
                             </div>
-                            <h3 className="font-semibold mb-2">Lightning Fast</h3>
-                            <p className="text-sm text-muted-foreground">Generate comprehensive documentation in seconds, not hours.</p>
+                            <h3 className="font-semibold mb-2 text-white">Lightning Fast</h3>
+                            <p className="text-sm text-gray-400">Generate comprehensive documentation in seconds, not hours.</p>
                         </div>
-                        <div className="feature-card p-6 rounded-2xl bg-background/40 backdrop-blur-lg border border-white/5 hover:border-primary/20 transition-colors">
-                            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                                <FileText className="h-6 w-6 text-primary" />
+                        <div className="feature-card p-6 rounded-2xl bg-gray-900/60 backdrop-blur-lg border border-gray-700/50 hover:border-indigo-500/30 transition-all hover:bg-gray-900/80 shadow-lg">
+                            <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center mb-4">
+                                <FileText className="h-6 w-6 text-indigo-400" />
                             </div>
-                            <h3 className="font-semibold mb-2">AI-Powered</h3>
-                            <p className="text-sm text-muted-foreground">Powered by Gemini AI to understand your codebase deeply.</p>
+                            <h3 className="font-semibold mb-2 text-white">AI-Powered</h3>
+                            <p className="text-sm text-gray-400">Powered by Gemini AI to understand your codebase deeply.</p>
                         </div>
-                        <div className="feature-card p-6 rounded-2xl bg-background/40 backdrop-blur-lg border border-white/5 hover:border-primary/20 transition-colors">
-                            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                                <Shield className="h-6 w-6 text-primary" />
+                        <div className="feature-card p-6 rounded-2xl bg-gray-900/60 backdrop-blur-lg border border-gray-700/50 hover:border-indigo-500/30 transition-all hover:bg-gray-900/80 shadow-lg">
+                            <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center mb-4">
+                                <Shield className="h-6 w-6 text-indigo-400" />
                             </div>
-                            <h3 className="font-semibold mb-2">Push to GitHub</h3>
-                            <p className="text-sm text-muted-foreground">One-click publish directly to your repository.</p>
+                            <h3 className="font-semibold mb-2 text-white">Push to GitHub</h3>
+                            <p className="text-sm text-gray-400">One-click publish directly to your repository.</p>
                         </div>
                     </div>
                 </div>
@@ -260,4 +262,3 @@ export default function Landing() {
         </div>
     );
 }
-
