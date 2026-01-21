@@ -1,0 +1,554 @@
+{
+  "name": "DocuGitHub - Repository Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "analyze",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Analyze",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 300],
+      "webhookId": "docugithub-analyze"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate HMAC signature\nconst crypto = require('crypto');\n\nconst webhookSecret = $env.WEBHOOK_SECRET;\nconst signature = $input.first().json.headers['x-webhook-signature'];\nconst body = $input.first().json.body;\n\nif (!webhookSecret) {\n  throw new Error('WEBHOOK_SECRET environment variable not configured');\n}\n\nif (!signature) {\n  return [{ json: { valid: false, error: 'Missing signature header' } }];\n}\n\nconst expectedSignature = crypto\n  .createHmac('sha256', webhookSecret)\n  .update(JSON.stringify(body))\n  .digest('hex');\n\nconst isValid = crypto.timingSafeEqual(\n  Buffer.from(signature),\n  Buffer.from('sha256=' + expectedSignature)\n);\n\nreturn [{ json: { valid: isValid, body: body } }];"
+      },
+      "id": "validate-hmac",
+      "name": "Validate HMAC Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "sig-valid",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "if-signature-valid",
+      "name": "IF Signature Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.body.session_id }}"
+            }
+          ]
+        }
+      },
+      "id": "fetch-session",
+      "name": "Fetch Session from Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [660, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "{{ $credentials.supabase }}",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "session-exists",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              },
+              "leftValue": "={{ $json.id }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      },
+      "id": "if-session-exists",
+      "name": "IF Session Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [880, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare for GitHub API call - determine auth method\nconst session = $input.first().json;\nconst requestBody = $('IF Signature Valid').first().json.body;\nconst githubToken = requestBody.github_token;\n\nreturn [{ json: {\n  session_id: session.id,\n  owner: session.repo_owner,\n  repo: session.repo_name,\n  default_branch: session.default_branch,\n  is_private: session.is_private,\n  github_token: githubToken || null,\n  has_auth: !!githubToken\n} }];"
+      },
+      "id": "prepare-github-request",
+      "name": "Prepare GitHub Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 100]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/zipball/{{ $json.default_branch }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            },
+            {
+              "name": "User-Agent",
+              "value": "DocuGitHub-n8n"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.github_token || $env.GITHUB_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "file"
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": true,
+              "maxRedirects": 5
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "download-repo-zip",
+      "name": "Download Repo Zipball",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1320, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "{{ $credentials.githubToken }}",
+          "name": "GitHub Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Smart file filtering for repository analysis\nconst JSZip = require('jszip');\n\n// Configuration\nconst MAX_FILE_SIZE = 1024 * 1024; // 1MB per file\nconst MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB total\nconst VERY_LARGE_REPO_SIZE = 100 * 1024 * 1024; // 100MB\n\n// Excluded directories (case-insensitive)\nconst EXCLUDED_DIRS = [\n  'node_modules', '.git', 'dist', 'build', 'out', 'target',\n  '__pycache__', '.pytest_cache', 'vendor', 'venv', '.venv',\n  'env', '.env', 'coverage', '.coverage', '.nyc_output',\n  'bower_components', 'jspm_packages', '.next', '.nuxt',\n  '.svelte-kit', 'public/build', 'tmp', 'temp', 'logs',\n  '.idea', '.vscode', '.gradle', '.mvn', 'bin', 'obj'\n];\n\n// Excluded file patterns\nconst EXCLUDED_EXTENSIONS = [\n  '.min.js', '.min.css', '.map', '.lock', '.log',\n  '.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.webp',\n  '.woff', '.woff2', '.ttf', '.eot', '.otf',\n  '.mp3', '.mp4', '.wav', '.avi', '.mov',\n  '.zip', '.tar', '.gz', '.rar', '.7z',\n  '.pdf', '.doc', '.docx', '.xls', '.xlsx',\n  '.exe', '.dll', '.so', '.dylib', '.bin',\n  '.pyc', '.pyo', '.class', '.o', '.obj'\n];\n\n// Priority files (analyze these first)\nconst PRIORITY_FILES = [\n  'package.json', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',\n  'requirements.txt', 'setup.py', 'pyproject.toml', 'Pipfile',\n  'Cargo.toml', 'go.mod', 'go.sum', 'Gemfile', 'composer.json',\n  'pom.xml', 'build.gradle', 'build.gradle.kts',\n  'README.md', 'README.rst', 'README.txt', 'README',\n  'CONTRIBUTING.md', 'LICENSE', 'LICENSE.md',\n  'Dockerfile', 'docker-compose.yml', 'docker-compose.yaml',\n  '.env.example', 'config.json', 'tsconfig.json', 'jsconfig.json',\n  'webpack.config.js', 'vite.config.js', 'rollup.config.js',\n  'next.config.js', 'nuxt.config.js', 'svelte.config.js',\n  'main.py', 'app.py', 'index.js', 'index.ts', 'main.go', 'main.rs',\n  'src/index.js', 'src/index.ts', 'src/main.js', 'src/main.ts',\n  'src/App.js', 'src/App.tsx', 'src/app.py', 'src/main.py'\n];\n\nconst input = $input.first();\nconst zipBinary = input.binary?.data;\n\nif (!zipBinary) {\n  throw new Error('No zip file received from GitHub');\n}\n\nconst sessionData = $('Prepare GitHub Request').first().json;\n\n// Load zip file\nconst zipBuffer = Buffer.from(zipBinary.data, 'base64');\nconst zip = await JSZip.loadAsync(zipBuffer);\n\n// Analyze files\nconst files = [];\nlet totalSize = 0;\nlet isShallowAnalysis = false;\n\n// Check if we're dealing with a very large repo\nlet repoTotalSize = 0;\nfor (const [path, file] of Object.entries(zip.files)) {\n  if (!file.dir) {\n    repoTotalSize += file._data?.uncompressedSize || 0;\n  }\n}\n\nif (repoTotalSize > VERY_LARGE_REPO_SIZE) {\n  isShallowAnalysis = true;\n}\n\nfunction shouldExclude(filePath) {\n  const lowerPath = filePath.toLowerCase();\n  \n  // Check excluded directories\n  for (const dir of EXCLUDED_DIRS) {\n    if (lowerPath.includes('/' + dir + '/') || lowerPath.startsWith(dir + '/')) {\n      return true;\n    }\n  }\n  \n  // Check excluded extensions\n  for (const ext of EXCLUDED_EXTENSIONS) {\n    if (lowerPath.endsWith(ext)) {\n      return true;\n    }\n  }\n  \n  return false;\n}\n\nfunction getPriority(filePath) {\n  const fileName = filePath.split('/').pop();\n  const lowerPath = filePath.toLowerCase();\n  \n  // Check direct matches\n  for (let i = 0; i < PRIORITY_FILES.length; i++) {\n    if (fileName === PRIORITY_FILES[i] || lowerPath.endsWith('/' + PRIORITY_FILES[i].toLowerCase())) {\n      return PRIORITY_FILES.length - i;\n    }\n  }\n  \n  // Source files get medium priority\n  if (lowerPath.includes('/src/') || lowerPath.includes('/lib/') || lowerPath.includes('/app/')) {\n    return 50;\n  }\n  \n  // Test files get lower priority\n  if (lowerPath.includes('/test') || lowerPath.includes('/spec') || lowerPath.includes('__test__')) {\n    return 10;\n  }\n  \n  return 20;\n}\n\n// Collect eligible files with priority\nconst eligibleFiles = [];\n\nfor (const [path, file] of Object.entries(zip.files)) {\n  if (file.dir) continue;\n  \n  // Remove the root folder name (GitHub adds owner-repo-hash/)\n  const relativePath = path.replace(/^[^/]+\\//, '');\n  \n  if (shouldExclude(relativePath)) continue;\n  \n  const fileSize = file._data?.uncompressedSize || 0;\n  if (fileSize > MAX_FILE_SIZE) continue;\n  \n  eligibleFiles.push({\n    path: relativePath,\n    file,\n    size: fileSize,\n    priority: getPriority(relativePath)\n  });\n}\n\n// Sort by priority (highest first)\neligibleFiles.sort((a, b) => b.priority - a.priority);\n\n// Take files up to size limit (or top 50 for shallow analysis)\nconst maxFiles = isShallowAnalysis ? 50 : 200;\nconst selectedFiles = [];\n\nfor (const f of eligibleFiles) {\n  if (selectedFiles.length >= maxFiles) break;\n  if (totalSize + f.size > MAX_TOTAL_SIZE) continue;\n  \n  selectedFiles.push(f);\n  totalSize += f.size;\n}\n\n// Extract content from selected files\nfor (const f of selectedFiles) {\n  try {\n    const content = await f.file.async('string');\n    files.push({\n      path: f.path,\n      content: content.substring(0, 50000), // Limit content size for LLM\n      size: f.size\n    });\n  } catch (e) {\n    // Skip binary files that can't be read as string\n  }\n}\n\nreturn [{ json: {\n  session_id: sessionData.session_id,\n  owner: sessionData.owner,\n  repo: sessionData.repo,\n  files,\n  file_count: files.length,\n  total_size: totalSize,\n  is_shallow_analysis: isShallowAnalysis,\n  repo_total_size: repoTotalSize\n} }];"
+      },
+      "id": "extract-and-filter-files",
+      "name": "Extract & Filter Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build prompt for Gemini analysis\nconst data = $input.first().json;\n\n// Build file tree\nconst fileTree = data.files.map(f => f.path).join('\\n');\n\n// Build file contents section\nconst fileContents = data.files.map(f => {\n  return `=== ${f.path} ===\\n${f.content}\\n`;\n}).join('\\n');\n\nconst prompt = `You are an expert software architect analyzing a GitHub repository to generate comprehensive README documentation.\n\n## Repository: ${data.owner}/${data.repo}\n\n## File Structure:\n${fileTree}\n\n## File Contents:\n${fileContents}\n\n## Analysis Task:\nAnalyze this repository and provide a structured JSON response with the following information:\n\n1. **project_purpose**: A clear 2-3 sentence description of what this project does and its main use case.\n\n2. **tech_stack**: List all technologies, frameworks, and major libraries used. Include:\n   - Primary language(s)\n   - Frameworks (e.g., React, Express, Django)\n   - Build tools (e.g., Webpack, Vite)\n   - Testing frameworks\n   - Database technologies\n   - Cloud/deployment technologies\n\n3. **architecture**: Describe the project architecture including:\n   - Overall pattern (monolith, microservices, serverless, etc.)\n   - Directory structure explanation\n   - Key modules/components and their responsibilities\n   - Data flow if applicable\n\n4. **key_features**: List 5-10 main features or capabilities of the project.\n\n5. **installation_steps**: Provide step-by-step installation instructions based on the dependency files found.\n\n6. **usage_examples**: Suggest 2-3 common usage examples or code snippets based on the codebase.\n\n7. **recommended_sections**: List README sections that would be most relevant for this project (e.g., \"API Reference\", \"Configuration\", \"Contributing\", \"Deployment\", etc.)\n\n8. **badges**: Suggest relevant shields.io badges (e.g., license, version, build status, test coverage).\n\n9. **detected_patterns**: Any notable patterns, conventions, or best practices used in the codebase.\n\n10. **potential_issues**: Any concerns, missing documentation, or suggestions for improvement.\n\nRespond with ONLY valid JSON in this exact structure:\n{\n  \"project_purpose\": \"string\",\n  \"tech_stack\": {\n    \"languages\": [\"string\"],\n    \"frameworks\": [\"string\"],\n    \"build_tools\": [\"string\"],\n    \"testing\": [\"string\"],\n    \"databases\": [\"string\"],\n    \"cloud\": [\"string\"]\n  },\n  \"architecture\": {\n    \"pattern\": \"string\",\n    \"structure_explanation\": \"string\",\n    \"key_components\": [{\"name\": \"string\", \"responsibility\": \"string\"}]\n  },\n  \"key_features\": [\"string\"],\n  \"installation_steps\": [\"string\"],\n  \"usage_examples\": [{\"description\": \"string\", \"code\": \"string\"}],\n  \"recommended_sections\": [\"string\"],\n  \"badges\": [{\"type\": \"string\", \"label\": \"string\"}],\n  \"detected_patterns\": [\"string\"],\n  \"potential_issues\": [\"string\"]\n}`;\n\nreturn [{ json: {\n  ...data,\n  prompt,\n  prompt_tokens_estimate: Math.ceil(prompt.length / 4)\n} }];"
+      },
+      "id": "build-gemini-prompt",
+      "name": "Build Gemini Analysis Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 100]
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": {{ JSON.stringify($json.prompt) }}\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.3,\n    \"topK\": 40,\n    \"topP\": 0.95,\n    \"maxOutputTokens\": 8192,\n    \"responseMimeType\": \"application/json\"\n  },\n  \"safetySettings\": [\n    {\"category\": \"HARM_CATEGORY_HARASSMENT\", \"threshold\": \"BLOCK_NONE\"},\n    {\"category\": \"HARM_CATEGORY_HATE_SPEECH\", \"threshold\": \"BLOCK_NONE\"},\n    {\"category\": \"HARM_CATEGORY_SEXUALLY_EXPLICIT\", \"threshold\": \"BLOCK_NONE\"},\n    {\"category\": \"HARM_CATEGORY_DANGEROUS_CONTENT\", \"threshold\": \"BLOCK_NONE\"}\n  ]\n}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 120000,
+          "retry": {
+            "enabled": true,
+            "maxRetries": 3,
+            "retryInterval": 5000,
+            "retryIntervalMultiplier": 2
+          }
+        }
+      },
+      "id": "call-gemini",
+      "name": "Call Gemini 2.0 Flash",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1980, 100],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "{{ $credentials.geminiApiKey }}",
+          "name": "Gemini API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process Gemini response\nconst response = $input.first().json;\nconst prevData = $('Build Gemini Analysis Prompt').first().json;\n\nif (response.statusCode === 429 || (response.body?.error?.status === 'RESOURCE_EXHAUSTED')) {\n  throw new Error('Gemini API rate limit exceeded. Please try again later.');\n}\n\nif (response.statusCode !== 200) {\n  throw new Error(`Gemini API error: ${response.statusCode} - ${JSON.stringify(response.body)}`);\n}\n\nconst geminiContent = response.body?.candidates?.[0]?.content?.parts?.[0]?.text;\n\nif (!geminiContent) {\n  throw new Error('No content in Gemini response');\n}\n\n// Parse the JSON response\nlet analysis;\ntry {\n  analysis = JSON.parse(geminiContent);\n} catch (e) {\n  // Try to extract JSON from markdown code blocks\n  const jsonMatch = geminiContent.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (jsonMatch) {\n    analysis = JSON.parse(jsonMatch[1]);\n  } else {\n    throw new Error('Failed to parse Gemini response as JSON: ' + e.message);\n  }\n}\n\nreturn [{ json: {\n  session_id: prevData.session_id,\n  owner: prevData.owner,\n  repo: prevData.repo,\n  analysis,\n  file_count: prevData.file_count,\n  is_shallow_analysis: prevData.is_shallow_analysis\n} }];"
+      },
+      "id": "process-gemini-response",
+      "name": "Process Gemini Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 100]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.session_id }}"
+            }
+          ]
+        },
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldName": "analysis",
+              "fieldValue": "={{ JSON.stringify($json.analysis) }}"
+            },
+            {
+              "fieldName": "status",
+              "fieldValue": "analyzed"
+            },
+            {
+              "fieldName": "analyzed_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "update-session-analysis",
+      "name": "Store Analysis in Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2420, 100],
+      "credentials": {
+        "supabaseApi": {
+          "id": "{{ $credentials.supabase }}",
+          "name": "Supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build success response\nconst data = $('Process Gemini Response').first().json;\n\nreturn [{ json: {\n  success: true,\n  session_id: data.session_id,\n  analysis_result: data.analysis,\n  is_shallow_analysis: data.is_shallow_analysis,\n  files_analyzed: data.file_count\n} }];"
+      },
+      "id": "build-success-response",
+      "name": "Build Success Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [2860, 100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: true, code: 'INVALID_SIGNATURE', message: 'Invalid or missing webhook signature' }) }}",
+        "options": {
+          "responseCode": 401,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-invalid-signature",
+      "name": "Respond - Invalid Signature",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: true, code: 'SESSION_NOT_FOUND', message: 'Session not found' }) }}",
+        "options": {
+          "responseCode": 404,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-session-not-found",
+      "name": "Respond - Session Not Found",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "content": "## DocuGitHub - Repository Analysis Workflow\n\n**Endpoint:** POST /webhook/analyze\n\n**Input:**\n```json\n{\n  \"session_id\": \"uuid\",\n  \"github_token\": \"optional-oauth-token\"\n}\n```\n\n**Flow:**\n1. Validate HMAC signature\n2. Fetch session from Supabase\n3. Download repo zipball from GitHub\n4. Smart file filtering (exclude node_modules, etc.)\n5. Send to Gemini 2.0 Flash for analysis\n6. Store analysis in Supabase\n7. Return analysis results\n\n**File Filtering:**\n- Excludes: node_modules, dist, build, .git, etc.\n- Max 1MB per file, 50MB total\n- Priority: package.json, README, src/main files\n- Large repos (>100MB): shallow analysis (top 50 files)",
+        "height": 480,
+        "width": 360
+      },
+      "id": "sticky-note",
+      "name": "Workflow Documentation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-320, 60]
+    }
+  ],
+  "connections": {
+    "Webhook - Analyze": {
+      "main": [
+        [
+          {
+            "node": "Validate HMAC Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate HMAC Signature": {
+      "main": [
+        [
+          {
+            "node": "IF Signature Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Signature Valid": {
+      "main": [
+        [
+          {
+            "node": "Fetch Session from Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Invalid Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Session from Supabase": {
+      "main": [
+        [
+          {
+            "node": "IF Session Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Session Exists": {
+      "main": [
+        [
+          {
+            "node": "Prepare GitHub Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond - Session Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare GitHub Request": {
+      "main": [
+        [
+          {
+            "node": "Download Repo Zipball",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Repo Zipball": {
+      "main": [
+        [
+          {
+            "node": "Extract & Filter Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract & Filter Files": {
+      "main": [
+        [
+          {
+            "node": "Build Gemini Analysis Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Gemini Analysis Prompt": {
+      "main": [
+        [
+          {
+            "node": "Call Gemini 2.0 Flash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Gemini 2.0 Flash": {
+      "main": [
+        [
+          {
+            "node": "Process Gemini Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Gemini Response": {
+      "main": [
+        [
+          {
+            "node": "Store Analysis in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Analysis in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Build Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Success Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "DocuGitHub"
+    }
+  ],
+  "triggerCount": 1,
+  "pinData": {}
+}

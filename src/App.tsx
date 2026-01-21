@@ -6,6 +6,8 @@ import Generating from "./pages/Generating";
 import Editor from "./pages/Editor";
 import Analysis from "./pages/Analysis";
 import RepoInit from "./pages/RepoInit";
+import Docs from "./pages/Docs";
+import Layout from "./components/Layout";
 import { AnimatePresence } from "framer-motion";
 
 function AnimatedRoutes() {
@@ -20,6 +22,7 @@ function AnimatedRoutes() {
         <Route path="/config" element={<Config />} />
         <Route path="/generating" element={<Generating />} />
         <Route path="/editor" element={<Editor />} />
+        <Route path="/docs" element={<Docs />} />
       </Routes>
     </AnimatePresence>
   );
@@ -28,9 +31,9 @@ function AnimatedRoutes() {
 function App() {
   return (
     <Router>
-      <div className="min-h-screen text-foreground font-sans antialiased overflow-hidden">
+      <Layout>
         <AnimatedRoutes />
-      </div>
+      </Layout>
     </Router>
   );
 }

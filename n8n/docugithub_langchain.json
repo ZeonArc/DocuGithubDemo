@@ -249,13 +249,14 @@
         },
         {
             "parameters": {
-                "prompt": "=You are a Senior Software Architect analyzing a codebase.\n\nFile Structure:\n{{ $json.fileStructure }}\n\nProvide:\n1. Tech Stack\n2. Architecture\n3. Key Components\n4. Project Type\n5. Notable Files\n\nOutput in Markdown format.",
-                "batching": {}
+                "text": "=You are a Senior Software Architect analyzing a codebase.\n\nFile Structure:\n{{ $json.fileStructure }}\n\nProvide:\n1. Tech Stack\n2. Architecture\n3. Key Components\n4. Project Type\n5. Notable Files\n\nOutput in Markdown format.",
+                "hasOutputParser": false,
+                "options": {}
             },
             "id": "llm-chain-analyze",
             "name": "LLM Chain: Analyze",
             "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.9,
+            "typeVersion": 1.4,
             "position": [
                 1160,
                 0
@@ -462,13 +463,14 @@
         },
         {
             "parameters": {
-                "prompt": "=You are an expert Technical Writer.\n\nProject Analysis:\n{{ $json.analysis_summary }}\n\nGenerate a comprehensive README.md with:\n1. Project Title with badges\n2. Description\n3. Table of Contents\n4. Installation\n5. Usage with code examples\n6. Configuration\n7. Contributing\n8. License\n\nOutput raw Markdown only.",
-                "batching": {}
+                "text": "=You are an expert Technical Writer.\n\nProject Analysis:\n{{ $json.analysis_summary }}\n\nGenerate a comprehensive README.md with:\n1. Project Title with badges\n2. Description\n3. Table of Contents\n4. Installation\n5. Usage with code examples\n6. Configuration\n7. Contributing\n8. License\n\nOutput raw Markdown only.",
+                "hasOutputParser": false,
+                "options": {}
             },
             "id": "llm-chain-generate",
             "name": "LLM Chain: Generate",
             "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.9,
+            "typeVersion": 1.4,
             "position": [
                 280,
                 500
@@ -921,13 +923,14 @@
         },
         {
             "parameters": {
-                "prompt": "=Edit this text:\n{{ $('Webhook: AI Edit').item.json.body.selectedText }}\n\nInstruction: {{ $('Webhook: AI Edit').item.json.body.instruction }}\n\nReturn ONLY the edited text, nothing else.",
-                "batching": {}
+                "text": "=Edit this text:\n{{ $('Webhook: AI Edit').item.json.body.selectedText }}\n\nInstruction: {{ $('Webhook: AI Edit').item.json.body.instruction }}\n\nReturn ONLY the edited text, nothing else.",
+                "hasOutputParser": false,
+                "options": {}
             },
             "id": "llm-chain-edit",
             "name": "LLM Chain: Edit",
             "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.9,
+            "typeVersion": 1.4,
             "position": [
                 60,
                 1500

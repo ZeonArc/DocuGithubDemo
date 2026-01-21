@@ -1,231 +1,137 @@
-# n8n Workflow Setup Guide
+# DocuGithub n8n Setup Guide
 
-This guide explains how to set up the DocuGithub n8n workflow with Auth0 JWT validation and LangChain Gemini integration.
+## Overview
+
+DocuGithub uses **6 separate n8n workflows** for modular architecture:
+
+| Workflow | Endpoint | Purpose |
+|----------|----------|---------|
+| 1-session-initialize | `/webhook/initialize` | Create session |
+| 2-repository-analysis | `/webhook/analyze` | AI analysis |
+| 3-user-preferences | `/webhook/preferences` | Set preferences |
+| 4-readme-generate | `/webhook/generate` | Generate README |
+| 5-chat-revision | `/webhook/chat` | AI revisions |
+| 6-github-push | `/webhook/push` | Push to GitHub |
+
+---
 
 ## Prerequisites
 
-- **n8n** v2.3+ running locally or via Docker
-- **Auth0** account with an API configured
-- **GitHub OAuth App** for repository access
-- **Google Gemini API Key** from [AI Studio](https://aistudio.google.com/app/apikey)
-- **Supabase** project with `documentation_sessions` table
+1. **n8n** (self-hosted or cloud) - v2.0+
+2. **Supabase** account with schema deployed
+3. **Google Gemini API** key
+4. **GitHub Token** (Personal Access Token)
 
 ---
 
-## Quick Start
+## Step 1: Set Environment Variables
 
-### 1. Start n8n
+In n8n Settings → Variables, add:
 
-**Docker:**
+```
+WEBHOOK_SECRET = <random-32-char-string>
+```
+
+Generate with:
 ```bash
-docker run -it --rm \
-  -p 5678:5678 \
-  -v n8n_data:/home/node/.n8n \
-  n8nio/n8n
-```
-
-**npm:**
-```bash
-npx n8n
-```
-
-Access n8n at: `http://localhost:5678`
-
----
-
-### 2. Create Credentials
-
-#### Google Gemini (PaLM) API
-1. Go to **Settings → Credentials → Add Credential**
-2. Search: **Google Gemini(PaLM) Api**
-3. Enter your API key from [AI Studio](https://aistudio.google.com/app/apikey)
-4. Save as "Google Gemini(PaLM) Api account"
-
-#### GitHub OAuth2
-1. Create a GitHub OAuth App at [GitHub Developer Settings](https://github.com/settings/developers)
-   - Authorization callback URL: `http://localhost:5678/rest/oauth2-credential/callback`
-2. In n8n: **Settings → Credentials → Add Credential → GitHub OAuth2 API**
-3. Enter Client ID and Client Secret
-4. Click **Connect** to authorize
-
-#### Supabase
-1. In n8n: **Settings → Credentials → Add Credential → Supabase API**
-2. Enter:
-   - **Host**: `https://your-project.supabase.co`
-   - **Service Role Key**: From Supabase Dashboard → Settings → API
-
----
-
-### 3. Import Workflow
-
-1. In n8n: **Workflows → Import from File**
-2. Select: `n8n/docugithub_langchain.json`
-3. The workflow will open in the editor
-
----
-
-### 4. Configure the Workflow
-
-#### Replace Auth0 Domain
-Find and replace in all `Auth0: Verify` nodes:
-```
-YOUR_AUTH0_TENANT.auth0.com → your-tenant.auth0.com
-```
-
-#### Update Credential References
-Click each node and select your credentials:
-- **Gemini nodes** → Select your "Google Gemini(PaLM) Api account"
-- **GitHub nodes** → Select your "GitHub OAuth2"
-- **Supabase nodes** → Select your "Supabase"
-
-#### Verify AI Connections
-Ensure each `Gemini` node connects to its `LLM Chain` with a **purple AI line**:
-- `Gemini (Analyze)` → `LLM Chain: Analyze`
-- `Gemini (Generate)` → `LLM Chain: Generate`
-- `Gemini (Edit)` → `LLM Chain: Edit`
-
----
-
-### 5. Activate & Get Webhook URLs
-
-1. Toggle the workflow to **Active**
-2. Open each Webhook node to see your URLs:
-   - `/webhook/analyze`
-   - `/webhook/generate`
-   - `/webhook/publish`
-   - `/webhook/ai-edit`
-
----
-
-## Workflow Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         ANALYZE PIPELINE                             │
-├─────────────────────────────────────────────────────────────────────┤
-│ Webhook → Auth0 → IF → Supabase → GitHub → Zip → Extract → Filter  │
-│                                                          ↓          │
-│                     Respond ← Supabase ← LLM Chain ← Gemini (AI)    │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────┐
-│                         GENERATE PIPELINE                            │
-├─────────────────────────────────────────────────────────────────────┤
-│ Webhook → Auth0 → IF → Supabase (Get) → LLM Chain ← Gemini (AI)     │
-│                                              ↓                       │
-│                               Respond ← Supabase (Save)              │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────┐
-│                         PUBLISH PIPELINE                             │
-├─────────────────────────────────────────────────────────────────────┤
-│ Webhook → Auth0 → IF → GitHub (Check) → IF (Exists?)                │
-│                                          ↓         ↓                │
-│                                      Update     Create              │
-│                                          ↓         ↓                │
-│                               Respond ← Supabase (Merge)            │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────┐
-│                         AI EDIT PIPELINE                             │
-├─────────────────────────────────────────────────────────────────────┤
-│ Webhook → Auth0 → IF → LLM Chain ← Gemini (AI) → Respond            │
-└─────────────────────────────────────────────────────────────────────┘
+openssl rand -hex 32
 ```
 
 ---
 
-## Nodes Used
+## Step 2: Create Credentials
 
-| Node Type | Purpose |
-|-----------|---------|
-| `Webhook` | Receive HTTP POST requests |
-| `HTTP Request` | Auth0 /userinfo validation |
-| `IF` | Route based on auth validity |
-| `Respond to Webhook` | Return JSON responses |
-| `Supabase` | Database operations |
-| `GitHub` | Repository and file operations |
-| `HTTP Request` | Download repo zip |
-| `Compression` | Extract zip files |
-| `Code` | Filter and process files |
-| `Basic LLM Chain` | LangChain processing |
-| `Google Gemini Chat Model` | AI language model |
+### Supabase API
+- **Name**: Supabase
+- **Host**: `https://your-project.supabase.co`
+- **Service Role Key**: (from Supabase dashboard)
+
+### GitHub Token (HTTP Header Auth)
+- **Name**: GitHub Token
+- **Header Name**: Authorization
+- **Header Value**: `Bearer ghp_your_token_here`
+
+### Google Gemini (PaLM API)
+- **Name**: Google Gemini
+- **API Key**: (from Google AI Studio)
+
+---
+
+## Step 3: Import Workflows
+
+Import each file from `n8n/workflows/`:
+
+1. `1-session-initialize.json`
+2. `2-repository-analysis.json`
+3. `3-user-preferences.json`
+4. `4-readme-generate.json`
+5. `5-chat-revision.json`
+6. `6-github-push.json`
+
+---
+
+## Step 4: Configure Credentials
+
+In each workflow, update the placeholder credential IDs:
+
+| Placeholder | Replace With |
+|-------------|--------------|
+| `YOUR_SUPABASE_ID` | Your Supabase credential ID |
+| `YOUR_GITHUB_TOKEN_ID` | Your GitHub Token credential ID |
+| `YOUR_GEMINI_ID` | Your Gemini credential ID |
+
+---
+
+## Step 5: Verify AI Connections
+
+For workflows 2, 4, 5 (with Gemini):
+- Ensure purple AI lines connect `Gemini` node → `LLM Chain` node
+- If missing, drag from Gemini's output to LLM Chain's AI input
+
+---
+
+## Step 6: Activate Workflows
+
+Toggle each workflow to **Active**.
 
 ---
 
 ## Testing
 
-### Test with curl
+### Test Initialize Endpoint
 
 ```bash
-# Get Auth0 token first
-TOKEN="your_auth0_access_token"
-
-# Test Analyze
-curl -X POST http://localhost:5678/webhook/analyze \
+curl -X POST http://localhost:5678/webhook/initialize \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"sessionId": "uuid", "owner": "username", "repo": "reponame"}'
+  -H "x-webhook-signature: sha256=$(echo -n '{"repo_url":"https://github.com/user/repo","session_id":"test-123"}' | openssl dgst -sha256 -hmac 'YOUR_WEBHOOK_SECRET' | cut -d' ' -f2)" \
+  -d '{"repo_url":"https://github.com/user/repo","session_id":"test-123"}'
+```
 
-# Test Generate
-curl -X POST http://localhost:5678/webhook/generate \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"sessionId": "uuid"}'
+---
 
-# Test Publish
-curl -X POST http://localhost:5678/webhook/publish \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"sessionId": "uuid", "owner": "username", "repo": "reponame", "content": "# README"}'
+## Frontend Configuration
 
-# Test AI Edit
-curl -X POST http://localhost:5678/webhook/ai-edit \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"selectedText": "Hello world", "instruction": "Make it formal"}'
+In your frontend `.env`:
+
+```env
+VITE_N8N_WEBHOOK_BASE=http://localhost:5678/webhook
+VITE_WEBHOOK_SECRET=<same-as-n8n-secret>
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key
 ```
 
 ---
 
 ## Troubleshooting
 
-### "Node type not found" Error
-Ensure you're using n8n v2.3+. The LangChain nodes (`@n8n/n8n-nodes-langchain.*`) are included by default.
+### "Invalid Signature" Error
+- Verify `WEBHOOK_SECRET` matches in n8n and frontend
+- Check signature is being sent as `x-webhook-signature` header
 
-### Gemini Not Responding
-1. Verify your API key is correct
-2. Check the AI connection (purple line) from Gemini to LLM Chain
-3. Test with a simple chat workflow first
+### "No prompt specified" Error
+- Ensure LLM Chain nodes have `text` parameter (not `prompt`)
+- Verify typeVersion is `1.4` for LLM Chain nodes
 
-### 401 Unauthorized
-1. Verify Auth0 domain is correctly set
-2. Check that the token is valid and not expired
-3. Test the token at `https://your-tenant.auth0.com/userinfo`
-
-### GitHub Operations Failing
-1. Ensure OAuth2 credential is connected
-2. Verify the user has write access to the repository
-3. Check the owner/repo values in the request
-
----
-
-## Available Workflow Files
-
-| File | Description |
-|------|-------------|
-| `docugithub_langchain.json` | **Recommended** - LangChain + Gemini |
-| `docugithub_v2.json` | Alternative with official Gemini node |
-| `docugithub_builtin_workflow.json` | HTTP Request fallback |
-
----
-
-## Frontend Configuration
-
-Update your frontend `.env`:
-
-```env
-VITE_N8N_WEBHOOK_BASE=http://localhost:5678/webhook
-```
-
-The frontend will automatically send the Auth0 token in the `Authorization` header.
+### Gemini Rate Limit
+- Check Google AI Studio for quota
+- Consider adding retry logic or delays

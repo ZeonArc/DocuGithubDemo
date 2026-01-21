@@ -73,9 +73,8 @@ export default function Layout({ children }: LayoutProps) {
                             <div>
                                 <h3 className="font-semibold mb-4 text-sm text-foreground">Product</h3>
                                 <ul className="space-y-2 text-sm text-muted-foreground">
-                                    <li><Link to="/features" className="hover:text-foreground transition-colors">Features</Link></li>
-                                    <li><Link to="/pricing" className="hover:text-foreground transition-colors">Pricing</Link></li>
-                                    <li><Link to="/integrations" className="hover:text-foreground transition-colors">Integrations</Link></li>
+                                    <li><Link to="/docs" className="hover:text-foreground transition-colors">How It Works</Link></li>
+                                    <li><a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-foreground transition-colors">GitHub</a></li>
                                 </ul>
                             </div>
 
@@ -83,17 +82,15 @@ export default function Layout({ children }: LayoutProps) {
                                 <h3 className="font-semibold mb-4 text-sm text-foreground">Resources</h3>
                                 <ul className="space-y-2 text-sm text-muted-foreground">
                                     <li><Link to="/docs" className="hover:text-foreground transition-colors">Documentation</Link></li>
-                                    <li><Link to="/api" className="hover:text-foreground transition-colors">API Reference</Link></li>
-                                    <li><Link to="/blog" className="hover:text-foreground transition-colors">Blog</Link></li>
+                                    <li><a href="https://n8n.io" target="_blank" rel="noreferrer" className="hover:text-foreground transition-colors">n8n Workflows</a></li>
                                 </ul>
                             </div>
 
                             <div>
-                                <h3 className="font-semibold mb-4 text-sm text-foreground">Company</h3>
+                                <h3 className="font-semibold mb-4 text-sm text-foreground">Connect</h3>
                                 <ul className="space-y-2 text-sm text-muted-foreground">
-                                    <li><Link to="/about" className="hover:text-foreground transition-colors">About</Link></li>
-                                    <li><Link to="/careers" className="hover:text-foreground transition-colors">Careers</Link></li>
-                                    <li><Link to="/legal" className="hover:text-foreground transition-colors">Privacy & Terms</Link></li>
+                                    <li><a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-foreground transition-colors">GitHub</a></li>
+                                    <li><a href="https://twitter.com" target="_blank" rel="noreferrer" className="hover:text-foreground transition-colors">Twitter</a></li>
                                 </ul>
                             </div>
                         </div>

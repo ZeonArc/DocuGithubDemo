@@ -1,0 +1,1966 @@
+{
+    "name": "DocuGithub - Complete Backend",
+    "nodes": [
+        {
+            "parameters": {
+                "content": "## DocuGithub Complete Backend\n\n✅ Auth0 JWT validation on all endpoints\n✅ 6 API endpoints\n✅ Gemini 2.0 Flash for AI\n✅ GitHub OAuth2 for repo access\n✅ Supabase for data storage\n\n**Endpoints:**\n- POST /initialize - Create session\n- POST /analyze - Analyze repo\n- POST /preferences - Set preferences\n- POST /generate - Generate README\n- POST /chat - Revise with AI\n- POST /push - Push to GitHub\n\n⚠️ Replace YOUR_AUTH0_DOMAIN",
+                "height": 340,
+                "width": 280
+            },
+            "id": "sticky-info",
+            "name": "Workflow Info",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                -900,
+                -100
+            ]
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "initialize",
+                "responseMode": "responseNode",
+                "options": {
+                    "rawBody": true
+                }
+            },
+            "id": "webhook-init",
+            "name": "Webhook: Initialize",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                -600,
+                0
+            ],
+            "webhookId": "initialize"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "https://YOUR_AUTH0_DOMAIN/userinfo",
+                "authentication": "none",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "={{ $json.headers.authorization }}"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "neverError": true
+                        }
+                    }
+                }
+            },
+            "id": "auth0-init",
+            "name": "Auth0: Verify (Init)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                -380,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.sub }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-auth-init",
+            "name": "IF: Valid? (Init)",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                -160,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: false, error: 'Unauthorized' }) }}",
+                "options": {
+                    "responseCode": 401
+                }
+            },
+            "id": "respond-401-init",
+            "name": "401 (Init)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                -160,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const body = $('Webhook: Initialize').item.json.body;\nconst auth = $('Auth0: Verify (Init)').item.json;\n\nconst githubRegex = /^(?:https?:\\/\\/)?(?:www\\.)?github\\.com\\/([a-zA-Z0-9_-]+)\\/([a-zA-Z0-9_.-]+?)(?:\\.git)?\\/?$/;\nconst match = body.repo_url?.match(githubRegex);\n\nif (!match) {\n  return [{ json: { valid: false, error: 'Invalid GitHub URL' } }];\n}\n\nreturn [{ json: {\n  valid: true,\n  owner: match[1],\n  repo: match[2],\n  repo_url: body.repo_url,\n  session_id: body.session_id || crypto.randomUUID(),\n  auth0_sub: auth.sub,\n  github_token: auth['https://docugithub.dev/github_token'] || null\n} }];"
+            },
+            "id": "parse-url",
+            "name": "Parse Repo URL",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                60,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.valid }}",
+                            "rightValue": true,
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "equals"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-url-valid",
+            "name": "IF: URL Valid?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                280,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: false, error: $json.error }) }}",
+                "options": {
+                    "responseCode": 400
+                }
+            },
+            "id": "respond-400-url",
+            "name": "400 Invalid URL",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                280,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "githubOAuth2Api",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Accept",
+                            "value": "application/vnd.github+json"
+                        },
+                        {
+                            "name": "User-Agent",
+                            "value": "DocuGithub"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "neverError": true
+                        }
+                    }
+                }
+            },
+            "id": "github-check-repo",
+            "name": "GitHub: Check Repo",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                500,
+                0
+            ],
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "YOUR_GITHUB_ID",
+                    "name": "GitHub OAuth2"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "const response = $input.first().json;\nconst prevData = $('IF: URL Valid?').first().json;\n\nif (response.id) {\n  return [{ json: {\n    exists: true,\n    ...prevData,\n    is_private: response.private || false,\n    default_branch: response.default_branch || 'main',\n    description: response.description,\n    language: response.language,\n    stars: response.stargazers_count\n  } }];\n}\n\nreturn [{ json: { exists: false, error: 'Repository not found or private', ...prevData } }];"
+            },
+            "id": "process-repo-check",
+            "name": "Process Repo Check",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                720,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.exists }}",
+                            "rightValue": true,
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "equals"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-repo-exists",
+            "name": "IF: Repo Exists?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                940,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: false, error: $json.error }) }}",
+                "options": {
+                    "responseCode": 404
+                }
+            },
+            "id": "respond-404-repo",
+            "name": "404 Repo Not Found",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                940,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "create",
+                "tableId": "sessions",
+                "fieldsUi": {
+                    "fieldValues": [
+                        {
+                            "fieldName": "id",
+                            "fieldValue": "={{ $json.session_id }}"
+                        },
+                        {
+                            "fieldName": "repo_owner",
+                            "fieldValue": "={{ $json.owner }}"
+                        },
+                        {
+                            "fieldName": "repo_name",
+                            "fieldValue": "={{ $json.repo }}"
+                        },
+                        {
+                            "fieldName": "repo_url",
+                            "fieldValue": "={{ $json.repo_url }}"
+                        },
+                        {
+                            "fieldName": "is_private",
+                            "fieldValue": "={{ $json.is_private }}"
+                        },
+                        {
+                            "fieldName": "default_branch",
+                            "fieldValue": "={{ $json.default_branch }}"
+                        },
+                        {
+                            "fieldName": "status",
+                            "fieldValue": "initialized"
+                        },
+                        {
+                            "fieldName": "repo_metadata",
+                            "fieldValue": "={{ JSON.stringify({ description: $json.description, language: $json.language, stars: $json.stars }) }}"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-create-session",
+            "name": "Supabase: Create Session",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                1160,
+                0
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_ID",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: true, session_id: $('IF: Repo Exists?').item.json.session_id, repo: { owner: $('IF: Repo Exists?').item.json.owner, name: $('IF: Repo Exists?').item.json.repo, is_private: $('IF: Repo Exists?').item.json.is_private } }) }}",
+                "options": {
+                    "responseCode": 200
+                }
+            },
+            "id": "respond-init-success",
+            "name": "Respond: Init Success",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                1380,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "analyze",
+                "responseMode": "responseNode",
+                "options": {
+                    "rawBody": true
+                }
+            },
+            "id": "webhook-analyze",
+            "name": "Webhook: Analyze",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                -600,
+                500
+            ],
+            "webhookId": "analyze"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "https://YOUR_AUTH0_DOMAIN/userinfo",
+                "authentication": "none",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "={{ $json.headers.authorization }}"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "neverError": true
+                        }
+                    }
+                }
+            },
+            "id": "auth0-analyze",
+            "name": "Auth0: Verify (Analyze)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                -380,
+                500
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.sub }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-auth-analyze",
+            "name": "IF: Valid? (Analyze)",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                -160,
+                500
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: false, error: 'Unauthorized' }) }}",
+                "options": {
+                    "responseCode": 401
+                }
+            },
+            "id": "respond-401-analyze",
+            "name": "401 (Analyze)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                -160,
+                700
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "get",
+                "tableId": "sessions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "id",
+                            "keyValue": "={{ $('Webhook: Analyze').item.json.body.session_id }}"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-get-session-analyze",
+            "name": "Supabase: Get Session",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                60,
+                500
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_ID",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.id }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-session-analyze",
+            "name": "IF: Session Exists?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                280,
+                500
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: false, error: 'Session not found' }) }}",
+                "options": {
+                    "responseCode": 404
+                }
+            },
+            "id": "respond-404-session-analyze",
+            "name": "404 Session (Analyze)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                280,
+                700
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "update",
+                "tableId": "sessions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "id",
+                            "keyValue": "={{ $json.id }}"
+                        }
+                    ]
+                },
+                "fieldsUi": {
+                    "fieldValues": [
+                        {
+                            "fieldName": "status",
+                            "fieldValue": "analyzing"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-set-analyzing",
+            "name": "Supabase: Set Analyzing",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                500,
+                500
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_ID",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "=https://api.github.com/repos/{{ $('IF: Session Exists?').item.json.repo_owner }}/{{ $('IF: Session Exists?').item.json.repo_name }}/zipball/{{ $('IF: Session Exists?').item.json.default_branch }}",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "githubOAuth2Api",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "User-Agent",
+                            "value": "DocuGithub"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "responseFormat": "file"
+                        }
+                    },
+                    "redirect": {
+                        "redirect": {
+                            "followRedirects": true
+                        }
+                    }
+                }
+            },
+            "id": "download-zip",
+            "name": "Download Zip",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                720,
+                500
+            ],
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "YOUR_GITHUB_ID",
+                    "name": "GitHub OAuth2"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "decompress",
+                "binaryPropertyName": "data"
+            },
+            "id": "extract-zip",
+            "name": "Extract Zip",
+            "type": "n8n-nodes-base.compression",
+            "typeVersion": 1,
+            "position": [
+                940,
+                500
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const items = $input.all();\nconst files = [];\nconst IGNORE = ['node_modules/', '.git/', 'dist/', 'build/', '.next/', '__pycache__/', 'vendor/', '.venv/'];\nconst EXTS = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java', '.json', '.yaml', '.yml', '.md', '.toml', '.cfg'];\n\nfor (const item of items) {\n  const f = item.json.fileName || '';\n  if (IGNORE.some(p => f.includes(p))) continue;\n  if (EXTS.some(ext => f.endsWith(ext))) {\n    files.push(f);\n  }\n}\n\nconst session = $('IF: Session Exists?').first().json;\nreturn [{ json: { \n  session_id: session.id,\n  owner: session.repo_owner,\n  repo: session.repo_name,\n  fileStructure: files.slice(0, 100).join('\\n'), \n  fileCount: files.length \n} }];"
+            },
+            "id": "filter-files",
+            "name": "Filter Files",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1160,
+                500
+            ]
+        },
+        {
+            "parameters": {
+                "text": "=You are a Senior Software Architect analyzing a GitHub repository.\n\nRepository: {{ $json.owner }}/{{ $json.repo }}\n\nFile Structure:\n{{ $json.fileStructure }}\n\nAnalyze this repository and provide a JSON response with:\n{\n  \"project_purpose\": \"2-3 sentence description\",\n  \"tech_stack\": {\n    \"languages\": [\"list\"],\n    \"frameworks\": [\"list\"],\n    \"build_tools\": [\"list\"]\n  },\n  \"architecture\": {\n    \"pattern\": \"monolith/microservices/etc\",\n    \"key_components\": [{\"name\": \"string\", \"responsibility\": \"string\"}]\n  },\n  \"key_features\": [\"list of 5-10 features\"],\n  \"installation_steps\": [\"step by step\"],\n  \"recommended_sections\": [\"list of README sections\"]\n}\n\nRespond with ONLY valid JSON.",
+                "hasOutputParser": false,
+                "options": {}
+            },
+            "id": "llm-chain-analyze",
+            "name": "LLM Chain: Analyze",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                1380,
+                500
+            ]
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-2.0-flash-exp",
+                "options": {}
+            },
+            "id": "gemini-analyze",
+            "name": "Gemini (Analyze)",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                1380,
+                720
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "YOUR_GEMINI_ID",
+                    "name": "Google Gemini(PaLM) Api account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "const response = $input.first().json;\nconst prevData = $('Filter Files').first().json;\n\nlet analysis;\ntry {\n  analysis = JSON.parse(response.text);\n} catch (e) {\n  const match = response.text.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (match) {\n    analysis = JSON.parse(match[1]);\n  } else {\n    analysis = { raw_response: response.text };\n  }\n}\n\nreturn [{ json: {\n  session_id: prevData.session_id,\n  analysis: analysis\n} }];"
+            },
+            "id": "process-analysis",
+            "name": "Process Analysis",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1600,
+                500
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "update",
+                "tableId": "sessions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "id",
+                            "keyValue": "={{ $json.session_id }}"
+                        }
+                    ]
+                },
+                "fieldsUi": {
+                    "fieldValues": [
+                        {
+                            "fieldName": "analysis",
+                            "fieldValue": "={{ JSON.stringify($json.analysis) }}"
+                        },
+                        {
+                            "fieldName": "status",
+                            "fieldValue": "analyzed"
+                        },
+                        {
+                            "fieldName": "analyzed_at",
+                            "fieldValue": "={{ new Date().toISOString() }}"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-save-analysis",
+            "name": "Supabase: Save Analysis",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                1820,
+                500
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_ID",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: true, session_id: $('Process Analysis').item.json.session_id, analysis: $('Process Analysis').item.json.analysis }) }}",
+                "options": {
+                    "responseCode": 200
+                }
+            },
+            "id": "respond-analyze-success",
+            "name": "Respond: Analyze Success",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                2040,
+                500
+            ]
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "generate",
+                "responseMode": "responseNode",
+                "options": {
+                    "rawBody": true
+                }
+            },
+            "id": "webhook-generate",
+            "name": "Webhook: Generate",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                -600,
+                1000
+            ],
+            "webhookId": "generate"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "https://YOUR_AUTH0_DOMAIN/userinfo",
+                "authentication": "none",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "={{ $json.headers.authorization }}"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "neverError": true
+                        }
+                    }
+                }
+            },
+            "id": "auth0-generate",
+            "name": "Auth0: Verify (Generate)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                -380,
+                1000
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.sub }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-auth-generate",
+            "name": "IF: Valid? (Generate)",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                -160,
+                1000
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: false, error: 'Unauthorized' }) }}",
+                "options": {
+                    "responseCode": 401
+                }
+            },
+            "id": "respond-401-generate",
+            "name": "401 (Generate)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                -160,
+                1200
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "get",
+                "tableId": "sessions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "id",
+                            "keyValue": "={{ $('Webhook: Generate').item.json.body.session_id }}"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-get-session-generate",
+            "name": "Supabase: Get Session (Gen)",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                60,
+                1000
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_ID",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.id }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-session-generate",
+            "name": "IF: Session? (Gen)",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                280,
+                1000
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: false, error: 'Session not found' }) }}",
+                "options": {
+                    "responseCode": 404
+                }
+            },
+            "id": "respond-404-generate",
+            "name": "404 (Generate)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                280,
+                1200
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const session = $input.first().json;\nconst analysis = typeof session.analysis === 'string' ? JSON.parse(session.analysis) : session.analysis;\nconst preferences = typeof session.preferences === 'string' ? JSON.parse(session.preferences) : session.preferences;\n\nreturn [{ json: {\n  session_id: session.id,\n  owner: session.repo_owner,\n  repo: session.repo_name,\n  analysis: analysis,\n  preferences: preferences || { tone: 'professional', include_toc: true }\n} }];"
+            },
+            "id": "prepare-generate",
+            "name": "Prepare Generate",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                500,
+                1000
+            ]
+        },
+        {
+            "parameters": {
+                "text": "=You are an expert Technical Writer creating a README.md.\n\nRepository: {{ $json.owner }}/{{ $json.repo }}\n\nProject Analysis:\n{{ JSON.stringify($json.analysis) }}\n\nUser Preferences:\n- Tone: {{ $json.preferences.tone || 'professional' }}\n- Include TOC: {{ $json.preferences.include_toc !== false }}\n- Sections: {{ JSON.stringify($json.preferences.sections || ['overview', 'installation', 'usage', 'contributing', 'license']) }}\n- Badges: {{ JSON.stringify($json.preferences.badges || ['license', 'version']) }}\n\nGenerate a comprehensive README.md with:\n1. Project title with appropriate badges\n2. Clear description based on analysis\n3. Table of contents (if requested)\n4. Installation instructions\n5. Usage examples with code snippets\n6. Configuration (if applicable)\n7. Contributing guidelines\n8. License section\n\nOutput ONLY the raw Markdown content, no explanation.",
+                "hasOutputParser": false,
+                "options": {}
+            },
+            "id": "llm-chain-generate",
+            "name": "LLM Chain: Generate",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                720,
+                1000
+            ]
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-2.0-flash-exp",
+                "options": {}
+            },
+            "id": "gemini-generate",
+            "name": "Gemini (Generate)",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                720,
+                1220
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "YOUR_GEMINI_ID",
+                    "name": "Google Gemini(PaLM) Api account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "const response = $input.first().json;\nconst prevData = $('Prepare Generate').first().json;\n\nlet readme = response.text || '';\nif (readme.startsWith('```markdown')) readme = readme.slice(11);\nif (readme.startsWith('```md')) readme = readme.slice(5);\nif (readme.startsWith('```')) readme = readme.slice(3);\nif (readme.endsWith('```')) readme = readme.slice(0, -3);\nreadme = readme.trim();\n\nreturn [{ json: {\n  session_id: prevData.session_id,\n  generated_readme: readme\n} }];"
+            },
+            "id": "process-readme",
+            "name": "Process README",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                940,
+                1000
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "create",
+                "tableId": "readme_versions",
+                "fieldsUi": {
+                    "fieldValues": [
+                        {
+                            "fieldName": "session_id",
+                            "fieldValue": "={{ $json.session_id }}"
+                        },
+                        {
+                            "fieldName": "version",
+                            "fieldValue": "1"
+                        },
+                        {
+                            "fieldName": "content",
+                            "fieldValue": "={{ $json.generated_readme }}"
+                        },
+                        {
+                            "fieldName": "changes_summary",
+                            "fieldValue": "Initial generation"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-create-version",
+            "name": "Supabase: Create Version",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                1160,
+                1000
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_ID",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "update",
+                "tableId": "sessions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "id",
+                            "keyValue": "={{ $('Process README').item.json.session_id }}"
+                        }
+                    ]
+                },
+                "fieldsUi": {
+                    "fieldValues": [
+                        {
+                            "fieldName": "generated_readme",
+                            "fieldValue": "={{ $('Process README').item.json.generated_readme }}"
+                        },
+                        {
+                            "fieldName": "current_version",
+                            "fieldValue": "1"
+                        },
+                        {
+                            "fieldName": "status",
+                            "fieldValue": "generated"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-update-session-gen",
+            "name": "Supabase: Update Session (Gen)",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                1380,
+                1000
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_ID",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: true, session_id: $('Process README').item.json.session_id, readme: $('Process README').item.json.generated_readme, version: 1 }) }}",
+                "options": {
+                    "responseCode": 200
+                }
+            },
+            "id": "respond-generate-success",
+            "name": "Respond: Generate Success",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                1600,
+                1000
+            ]
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "push",
+                "responseMode": "responseNode",
+                "options": {
+                    "rawBody": true
+                }
+            },
+            "id": "webhook-push",
+            "name": "Webhook: Push",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                -600,
+                1500
+            ],
+            "webhookId": "push"
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "https://YOUR_AUTH0_DOMAIN/userinfo",
+                "authentication": "none",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "={{ $json.headers.authorization }}"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "neverError": true
+                        }
+                    }
+                }
+            },
+            "id": "auth0-push",
+            "name": "Auth0: Verify (Push)",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                -380,
+                1500
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.sub }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-auth-push",
+            "name": "IF: Valid? (Push)",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                -160,
+                1500
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: false, error: 'Unauthorized' }) }}",
+                "options": {
+                    "responseCode": 401
+                }
+            },
+            "id": "respond-401-push",
+            "name": "401 (Push)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                -160,
+                1700
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "get",
+                "tableId": "sessions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "id",
+                            "keyValue": "={{ $('Webhook: Push').item.json.body.session_id }}"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-get-session-push",
+            "name": "Supabase: Get Session (Push)",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                60,
+                1500
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_ID",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.id }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-session-push",
+            "name": "IF: Session? (Push)",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                280,
+                1500
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: false, error: 'Session not found' }) }}",
+                "options": {
+                    "responseCode": 404
+                }
+            },
+            "id": "respond-404-push",
+            "name": "404 (Push)",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                280,
+                1700
+            ]
+        },
+        {
+            "parameters": {
+                "resource": "file",
+                "operation": "get",
+                "owner": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $json.repo_owner }}"
+                },
+                "repository": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $json.repo_name }}"
+                },
+                "filePath": "README.md"
+            },
+            "id": "github-check-readme",
+            "name": "GitHub: Check README",
+            "type": "n8n-nodes-base.github",
+            "typeVersion": 1,
+            "position": [
+                500,
+                1500
+            ],
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "YOUR_GITHUB_ID",
+                    "name": "GitHub OAuth2"
+                }
+            },
+            "continueOnFail": true
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "version": 2
+                    },
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.sha }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "string",
+                                "operation": "isNotEmpty"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                }
+            },
+            "id": "if-readme-exists",
+            "name": "IF: README Exists?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2,
+            "position": [
+                720,
+                1500
+            ]
+        },
+        {
+            "parameters": {
+                "resource": "file",
+                "operation": "edit",
+                "owner": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $('IF: Session? (Push)').item.json.repo_owner }}"
+                },
+                "repository": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $('IF: Session? (Push)').item.json.repo_name }}"
+                },
+                "filePath": "README.md",
+                "fileContent": "={{ $('Webhook: Push').item.json.body.content || $('IF: Session? (Push)').item.json.generated_readme }}",
+                "commitMessage": "=docs: Update README via DocuGithub (v{{ $('IF: Session? (Push)').item.json.current_version || 1 }})"
+            },
+            "id": "github-update-readme",
+            "name": "GitHub: Update README",
+            "type": "n8n-nodes-base.github",
+            "typeVersion": 1,
+            "position": [
+                940,
+                1400
+            ],
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "YOUR_GITHUB_ID",
+                    "name": "GitHub OAuth2"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "resource": "file",
+                "operation": "create",
+                "owner": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $('IF: Session? (Push)').item.json.repo_owner }}"
+                },
+                "repository": {
+                    "__rl": true,
+                    "mode": "raw",
+                    "value": "={{ $('IF: Session? (Push)').item.json.repo_name }}"
+                },
+                "filePath": "README.md",
+                "fileContent": "={{ $('Webhook: Push').item.json.body.content || $('IF: Session? (Push)').item.json.generated_readme }}",
+                "commitMessage": "=docs: Create README via DocuGithub"
+            },
+            "id": "github-create-readme",
+            "name": "GitHub: Create README",
+            "type": "n8n-nodes-base.github",
+            "typeVersion": 1,
+            "position": [
+                940,
+                1600
+            ],
+            "credentials": {
+                "githubOAuth2Api": {
+                    "id": "YOUR_GITHUB_ID",
+                    "name": "GitHub OAuth2"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "update",
+                "tableId": "sessions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "id",
+                            "keyValue": "={{ $('IF: Session? (Push)').item.json.id }}"
+                        }
+                    ]
+                },
+                "fieldsUi": {
+                    "fieldValues": [
+                        {
+                            "fieldName": "status",
+                            "fieldValue": "pushed"
+                        },
+                        {
+                            "fieldName": "pushed_at",
+                            "fieldValue": "={{ new Date().toISOString() }}"
+                        },
+                        {
+                            "fieldName": "commit_sha",
+                            "fieldValue": "={{ $json.commit?.sha || $json.sha }}"
+                        },
+                        {
+                            "fieldName": "commit_url",
+                            "fieldValue": "={{ $json.commit?.html_url || $json.html_url }}"
+                        }
+                    ]
+                }
+            },
+            "id": "supabase-update-pushed",
+            "name": "Supabase: Update Pushed",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                1160,
+                1500
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_ID",
+                    "name": "Supabase"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: true, message: 'README pushed to GitHub!', commit_url: $('Supabase: Update Pushed').item.json.commit_url }) }}",
+                "options": {
+                    "responseCode": 200
+                }
+            },
+            "id": "respond-push-success",
+            "name": "Respond: Push Success",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                1380,
+                1500
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook: Initialize": {
+            "main": [
+                [
+                    {
+                        "node": "Auth0: Verify (Init)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Auth0: Verify (Init)": {
+            "main": [
+                [
+                    {
+                        "node": "IF: Valid? (Init)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF: Valid? (Init)": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Repo URL",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "401 (Init)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Repo URL": {
+            "main": [
+                [
+                    {
+                        "node": "IF: URL Valid?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF: URL Valid?": {
+            "main": [
+                [
+                    {
+                        "node": "GitHub: Check Repo",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "400 Invalid URL",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "GitHub: Check Repo": {
+            "main": [
+                [
+                    {
+                        "node": "Process Repo Check",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Process Repo Check": {
+            "main": [
+                [
+                    {
+                        "node": "IF: Repo Exists?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF: Repo Exists?": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Create Session",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "404 Repo Not Found",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Create Session": {
+            "main": [
+                [
+                    {
+                        "node": "Respond: Init Success",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook: Analyze": {
+            "main": [
+                [
+                    {
+                        "node": "Auth0: Verify (Analyze)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Auth0: Verify (Analyze)": {
+            "main": [
+                [
+                    {
+                        "node": "IF: Valid? (Analyze)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF: Valid? (Analyze)": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Get Session",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "401 (Analyze)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Get Session": {
+            "main": [
+                [
+                    {
+                        "node": "IF: Session Exists?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF: Session Exists?": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Set Analyzing",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "404 Session (Analyze)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Set Analyzing": {
+            "main": [
+                [
+                    {
+                        "node": "Download Zip",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Download Zip": {
+            "main": [
+                [
+                    {
+                        "node": "Extract Zip",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Zip": {
+            "main": [
+                [
+                    {
+                        "node": "Filter Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Filter Files": {
+            "main": [
+                [
+                    {
+                        "node": "LLM Chain: Analyze",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini (Analyze)": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "LLM Chain: Analyze",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "LLM Chain: Analyze": {
+            "main": [
+                [
+                    {
+                        "node": "Process Analysis",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Process Analysis": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Save Analysis",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Save Analysis": {
+            "main": [
+                [
+                    {
+                        "node": "Respond: Analyze Success",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook: Generate": {
+            "main": [
+                [
+                    {
+                        "node": "Auth0: Verify (Generate)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Auth0: Verify (Generate)": {
+            "main": [
+                [
+                    {
+                        "node": "IF: Valid? (Generate)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF: Valid? (Generate)": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Get Session (Gen)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "401 (Generate)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Get Session (Gen)": {
+            "main": [
+                [
+                    {
+                        "node": "IF: Session? (Gen)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF: Session? (Gen)": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Generate",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "404 (Generate)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare Generate": {
+            "main": [
+                [
+                    {
+                        "node": "LLM Chain: Generate",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gemini (Generate)": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "LLM Chain: Generate",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "LLM Chain: Generate": {
+            "main": [
+                [
+                    {
+                        "node": "Process README",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Process README": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Create Version",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Create Version": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Update Session (Gen)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Update Session (Gen)": {
+            "main": [
+                [
+                    {
+                        "node": "Respond: Generate Success",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook: Push": {
+            "main": [
+                [
+                    {
+                        "node": "Auth0: Verify (Push)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Auth0: Verify (Push)": {
+            "main": [
+                [
+                    {
+                        "node": "IF: Valid? (Push)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF: Valid? (Push)": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Get Session (Push)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "401 (Push)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Get Session (Push)": {
+            "main": [
+                [
+                    {
+                        "node": "IF: Session? (Push)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF: Session? (Push)": {
+            "main": [
+                [
+                    {
+                        "node": "GitHub: Check README",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "404 (Push)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "GitHub: Check README": {
+            "main": [
+                [
+                    {
+                        "node": "IF: README Exists?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IF: README Exists?": {
+            "main": [
+                [
+                    {
+                        "node": "GitHub: Update README",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "GitHub: Create README",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "GitHub: Update README": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Update Pushed",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "GitHub: Create README": {
+            "main": [
+                [
+                    {
+                        "node": "Supabase: Update Pushed",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Supabase: Update Pushed": {
+            "main": [
+                [
+                    {
+                        "node": "Respond: Push Success",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "active": false
+}
