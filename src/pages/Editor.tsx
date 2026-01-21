@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAppStore } from "@/store/useAppStore";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -22,8 +22,7 @@ import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function Editor() {
-    const navigate = useNavigate();
-    const { generatedDoc, sessionId, repoUrl, githubToken } = useAppStore();
+    const { generatedDoc, sessionId, repoUrl } = useAppStore();
     const [content, setContent] = useState(generatedDoc || "# Welcome to DocuGithub Editor\n\nStart typing your documentation or generate one from the homepage.\n\n## Features\n\n- **Live Preview** - See your markdown rendered in real-time\n- **AI Editing** - Select text and use AI to improve it\n- **One-click Publish** - Push directly to GitHub\n\n```javascript\nconst greeting = 'Hello, World!';\nconsole.log(greeting);\n```\n\n## Getting Started\n\n1. Go to the homepage\n2. Enter your GitHub repository URL\n3. Generate documentation with AI\n4. Edit and refine here\n5. Push to GitHub!");
     const [isPublishing, setIsPublishing] = useState(false);
     const [isPublished, setIsPublished] = useState(false);
